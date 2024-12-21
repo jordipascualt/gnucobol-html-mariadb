@@ -1,0 +1,1 @@
+Currently we usr "cobolhtml" as database name. If you cange it remember to change on connect sting.
