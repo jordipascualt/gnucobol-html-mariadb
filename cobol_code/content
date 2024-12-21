@@ -3,13 +3,10 @@
     COBLOGIN.SQB: First program tu execute needs a "session cookie" alrady createt in the cliente browser.
     COBOLMENU.SQB: The program as loop where to return and/or call after each iteration.
     COBUSRLST.SQB: List mode where to choose and navigate for the selecte object (users).
-    READPAGE.SQB: 
- SENDPAGE.SQB
- COBLOGIN.SQB
-
- COBNEWUSR.SQB
- COBNEWPWD.SQB
-
+    READPAGE.SQB: This program reads the "xmlhttpPost" chunk of data form the browser into sysfields table.
+    SENDPAGE.SQB: CAUTION, This is a .dll or .so object to collect all the page parts and build de HTNL page to send
+    COBNEWUSR.SQB: Simple User management page with all CRUD operations.
+    COBNEWPWD.SQB: Forgot password util.
 
 2.- The ODBC connect string:
     For windows (Tested Windows 10):
@@ -69,7 +66,3 @@
     cp $1.so /var/www/cgi-bin
     rm $1.so
     rm $1.COB
-
-
-
-
