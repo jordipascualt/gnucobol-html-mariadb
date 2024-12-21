@@ -1,1 +1,75 @@
+1.- Inluded programs:
+    For compatibility reasons (windows/Linux) and javascript, we will use ".EXE" on all platforms for executable files.
+    COBLOGIN.SQB: First program tu execute needs a "session cookie" alrady createt in the cliente browser.
+    COBOLMENU.SQB: The program as loop where to return and/or call after each iteration.
+    COBUSRLST.SQB: List mode where to choose and navigate for the selecte object (users).
+    READPAGE.SQB: 
+ SENDPAGE.SQB
+ COBLOGIN.SQB
+
+ COBNEWUSR.SQB
+ COBNEWPWD.SQB
+
+
+2.- The ODBC connect string:
+    For windows (Tested Windows 10):
+    (See odbcad32.exe, Drivers)
+           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};' 
+                'SERVER=localhost;'
+                'PORT=3306;'
+                'DATABASE=cobolhtml;'
+                'USER=*******;'
+                'PASSWORD=*******;'
+           INTO BUFFER.
+           EXEC SQL 
+               CONNECT TO :BUFFER 
+           END-EXEC
+
+    For Linux (Tested Fedora 40).
+    (see /etc/idbcinst.ini)
+           STRING 'DRIVER={MariaDB};'
+                'SERVER=localhost;'
+                'PORT=3306;'
+                'DATABASE=cobolhtml;'
+                'USER=*******;'
+                'PASSWORD=******;'
+           INTO BUFFER.
+           EXEC SQL 
+             CONNECT TO :BUFFER 
+           END-EXEC
+
+3.- compiler option, windows (Direct executables to /apache/cgi-bin):
+    C:\gnucobol64\x64\release\esqlOC.exe -static -o c:\gnucobol64\%1.cob c:\gnucobol64\%1.sqb
+    C:\gnucobol64\bin\cobc.exe -x -o C:\gnucobol64\%1.exe -Q "C:\gnucobol64\x64\release\ocsql.lib" C:\gnucobol64\%1.cob
+    del C:\gnucobol64\%1.cob
+    copy C:\gnucobol64\%1.exe C:\apache24\cgi-bin\%1.exe
+    del C:\gnucobol64\%1.exe 
+
+    C:\gnucobol64\x64\release\esqlOC.exe -static -o c:\gnucobol64\%1.cob c:\gnucobol64\%1.sqb
+    C:\gnucobol64\bin\cobc.exe -m -o C:\gnucobol64\%1.dll -Q "C:\gnucobol64\x64\release\ocsql.lib" C:\gnucobol64\%1.cob
+    del C:\gnucobol64\%1.cob
+    copy C:\gnucobol64\%1.dll C:\apache24\cgi-bin\%1.dll
+    del C:\gnucobol64\%1.dll
+
+4.- compiler option, direct (Direct executables to /apache/cgi-bin):
+    export OCSQL_LOGLEVEL=0
+    echo "precompiler. " $1.SQB
+    esqlOC -o $1.COB $1.SQB
+    echo "compiler. " $1.COB
+    cobc -x -v -o $1.EXE -Q "/usr/lib64/libocsql.so" $1.COB
+    cp $1.EXE /var/www/cgi-bin
+    rm $1.EXE
+    rm $1.COB
+
+    export OCSQL_LOGLEVEL=0
+    echo "precompiler. " $1.SQB
+    esqlOC -o $1.COB $1.SQB
+    echo "compiler. " $1.COB
+    cobc -m -v -o $1.so -Q "/usr/lib64/libocsql.so" $1.COB
+    cp $1.so /var/www/cgi-bin
+    rm $1.so
+    rm $1.COB
+
+
+
 
