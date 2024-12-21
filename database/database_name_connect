@@ -1,3 +1,12 @@
 Currently we usr "cobolhtml" as database name. If you cange it remember to change on connect sting.
 Names for the driver in connect string may be found on odbcad32.exe "Drivers or controllers" for windows.
 Also on Lunix see /etc/odbcist.ini.
+
+Tables and usage:
+
+	sysfields -> Where to store/retrieve data from the browser (READPAGE and Main programs).
+	sysmappage -> Parts or pages to be included in a HTML page for a main program.
+	sysmaps -> Pages and titles.
+	syspages -> Parts of pages to build a overall HTNL page.
+	sysusers -> User table, we include a select, radio bottuns and check-box to show the use.
+
