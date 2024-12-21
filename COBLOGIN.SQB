@@ -1,0 +1,345 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COBLOGIN.
+
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       WORKING-STORAGE SECTION.
+       EXEC SQL 
+           BEGIN DECLARE SECTION 
+       END-EXEC.
+       01  HOSTVARS.
+           05 BUFFER               PIC X(512).
+           05 XSQL1                PIC X.
+           05 XSQL16               PIC X(16).
+           05 XSQL32               PIC X(32).
+           05 XNUM12               PIC 9(12).
+           05 HCAMPO               PIC X(32).
+           05 PWDFLD               PIC X(32).
+           05 USER                 PIC X(32).
+           05 PAGEH                PIC X(63535).
+       01  USERS.
+           05 COMMENT              PIC X(128).
+           05 AGREE                PIC X.
+           05 AGE                  PIC X(16).
+           05 TIPO                 PIC X(16).
+           05 TIMEHMS              PIC X(8).
+           05 DATEDMY              PIC X(10).
+           05 PWD                  PIC X(32).
+           05 USERNAME             PIC X(32).
+           05 EMAIL                PIC X(32).
+           05 IDENT                PIC X(11).
+           05 NAME                 PIC X(64).
+       01  SYSFLD.
+           05 IDFLD                PIC 9(11).
+           05 TNXFLD               PIC 9(11).
+           05 MAPFLD               PIC X(16).
+           05 FLD                  PIC X(32).
+           05 LENFLD               PIC 9(11).
+           05 COMFLD               PIC X(128).
+           05 VALFLD               PIC X(128).
+       EXEC SQL
+           END DECLARE SECTION 
+       END-EXEC.
+       01  RESULTADO               PIC X(256).
+       01  OPERACION               PIC X(50).
+       01  IN-STATUS               PIC 99.
+       01  NEWLINE                 PIC X     VALUE X'0A'.
+
+       01  INDIFIN                 PIC 9 VALUE 0.
+       01  IX                      PIC 9999 VALUE 0.
+       01  IT                      PIC 99 VALUE 0.
+       01  DATETIME                PIC X(21).
+       01  XSTAMP                  PIC X(19).
+       01  SES                     PIC X(32).
+       01  LASTTNX                 PIC 9(11).
+       01  BUTTONCK                PIC X(128).
+       01  PAGEA                   PIC X(63535).
+
+       01  SYSCOMMALL              EXTERNAL.
+           05 SYSCOMM.
+             07 ACCTN              PIC X.
+             07 PAGEX              PIC X(16).
+             07 IDET               PIC X(11).
+             07 PAGEACTIVE         PIC X.
+             07 PROGID             PIC X(16).
+           05 PAGETOSEND           PIC X(63535).
+
+      *> ***************************************************************
+       PROCEDURE DIVISION.
+       COBLOGIN.
+      *> ALWAYS SEND OUT THE CONTENT-TYPE BEFORE ANY OTHER IO
+           DISPLAY
+             "Content-type: text/html"
+             NEWLINE
+           END-DISPLAY
+           MOVE SPACES TO SYSCOMM.
+           ACCEPT SYSCOMM FROM COMMAND-LINE.
+           INSPECT SYSCOMM REPLACING ALL "_" BY " ".
+           IF ACCTN < '*' 
+              MOVE 'C' TO ACCTN
+              MOVE 'LOGIN' TO PAGEX
+              MOVE 0 TO IDET
+              MOVE 'N' TO PAGEACTIVE
+              MOVE 'COBLOGIN.EXE' TO PROGID.
+           MOVE 'CONNECT' TO OPERACION.
+           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+                'SERVER=localhost;'
+                'PORT=3306;'
+                'DATABASE=cobolhtml;'
+                'USER=root;'
+                'PASSWORD=jordi;'
+           INTO BUFFER.
+           EXEC SQL 
+             CONNECT TO :BUFFER 
+           END-EXEC
+           PERFORM SQLERRORES.
+           IF PAGEACTIVE = 'N'
+              PERFORM TOSENDPAGE
+           ELSE PERFORM TOGETPAGE.
+           STOP RUN.
+
+       TOSENDPAGE.
+           INSPECT SYSCOMM REPLACING ALL " " BY "_".
+           MOVE 'Y' TO PAGEACTIVE.
+           CALL "SENDPAGE".
+           DISPLAY FUNCTION TRIM(PAGETOSEND).
+
+       TOGETPAGE.
+           CALL "C$SLEEP" USING 1 END-CALL.
+           MOVE PAGEX TO XSQL16.
+           MOVE 0 TO LASTTNX.
+           MOVE 0 TO TNXFLD.
+           EXEC SQL
+               DECLARE CUR_FLD CURSOR FOR
+                   SELECT CAMPO, VALOR, TRANCODE FROM sysfields
+                   WHERE MAPNAME = :XSQL16
+           END-EXEC
+           MOVE 'DECLARE CURSOR SYSFIELDS' TO OPERACION.
+           PERFORM SQLERRORES.
+           EXEC SQL 
+              OPEN CUR_FLD
+           END-EXEC
+           MOVE 'POSICIONARSE ' TO OPERACION.
+           PERFORM SQLERRORES.
+           IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
+           PERFORM UNTIL INDIFIN = 1
+              IF INDIFIN = 0
+                 EXEC SQL 
+                      FETCH CUR_FLD
+                 INTO 
+                      :FLD, :VALFLD, TNXFLD
+                 END-EXEC
+                 MOVE 'LECTURA-NEXT FLD' TO OPERACION
+                 PERFORM SQLERRORES
+                 IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
+                 ELSE ADD 1 TO IX
+                    IF LASTTNX = 0
+                       MOVE TNXFLD TO LASTTNX
+                    END-IF
+                    IF TNXFLD NOT = LASTTNX
+                       MOVE 1 TO INDIFIN
+                    ELSE
+                       PERFORM VALORES
+                    END-IF
+                 END-IF
+           END-PERFORM.
+           EXEC SQL
+               CLOSE CUR_FLD
+           END-EXEC
+           MOVE 'CIERRE CURSOR ' TO OPERACION.
+           PERFORM SQLERRORES.
+           MOVE 'C' TO ACCTN.
+
+      * PROGRAM LOGIC. PAGE READ. **********************************
+
+         MOVE 'READ USER' TO OPERACION.
+         EXEC SQL 
+              SELECT * FROM sysusers
+               WHERE USERNAME = :USER
+               INTO :IDENT, :NAME, :EMAIL, :USERNAME, :PWD,
+                      :DATEDMY, :TIMEHMS, :TIPO, :AGE, :AGREE, 
+                      :COMMENT
+         END-EXEC
+         PERFORM SQLERRORES.
+
+      *   FOR DEBUGG.
+      *   DISPLAY USER "-" USERNAME "-" PWDFLD, "-" PWD "-" RESULTADO.
+
+         IF PWD = PWDFLD AND RESULTADO = SPACES
+            MOVE 'DELETE OLD FIELDS/USER' TO OPERACION
+            MOVE SPACES TO BUFFER
+            STRING "DELETE FROM sysfields WHERE user = '"
+                   FUNCTION TRIM (USERNAME) 
+                   "' or user < '*'"
+                   " or user = 'null';"
+            INTO BUFFER
+            EXEC SQL 
+               EXECUTE IMMEDIATE :BUFFER
+            END-EXEC
+            PERFORM SQLERRORES
+            MOVE 'C' TO ACCTN
+            MOVE 0 TO IDET
+            MOVE 'N' TO PAGEACTIVE
+            MOVE 'MENU' TO PAGEX
+            MOVE 'COBOLMENU.EXE' TO PROGID
+            INSPECT SYSCOMM REPLACING ALL " " BY "_"
+            STRING PROGID DELIMITED BY "_", 
+               "?", SYSCOMM 
+               INTO RESULTADO   
+      *     DOCUMENT.COOKIE = "USERNAME=USER NAME";
+            STRING '<script>'
+                   'document.cookie = "USERNAME='
+                   FUNCTION TRIM(USERNAME)
+                   ' ";'
+                   'window.location.href = "'
+                   RESULTADO
+                   '";'
+                   '</script>'
+              INTO BUFFER
+            DISPLAY BUFFER
+            STOP RUN
+         ELSE
+            MOVE SPACES TO BUFFER
+            MOVE 'C' TO ACCTN
+            MOVE 0 TO IDET
+            MOVE 'N' TO PAGEACTIVE
+            MOVE 'LOGIN' TO PAGEX
+            MOVE 'COBLOGIN.EXE' TO PROGID
+            INSPECT SYSCOMM REPLACING ALL " " BY "_"
+            STRING PROGID DELIMITED BY "_", 
+               "?", SYSCOMM 
+               INTO RESULTADO
+            MOVE 'N' TO PAGEACTIVE
+            INSPECT SYSCOMM REPLACING ALL " " BY "_"
+            STRING '<script>'
+                   'alert("USER OR PASSWORD NOT OK");'
+                   'window.location.href = "'
+                   RESULTADO
+                   '";'
+                   '</script>'
+              INTO BUFFER
+            DISPLAY BUFFER.
+         STOP RUN.
+
+       VALORES.
+      *     DISPLAY FLD , "-", VALFLD, "-<BR>".
+           IF FLD = 'SYSCOMM' MOVE VALFLD TO SYSCOMM.
+           IF FLD = 'buttonck' MOVE VALFLD TO BUTTONCK.
+           IF FLD = 'password' MOVE VALFLD TO PWDFLD.
+           IF FLD = 'usuario' MOVE VALFLD TO USER.
+
+       SENDPAGE.
+           INSPECT SYSCOMM REPLACING ALL '_' BY ' '.
+           MOVE PAGEX TO XSQL16, OPERACION
+           EXEC SQL 
+              SELECT TITLE FROM SYSMAPS
+               WHERE NAME = :XSQL16
+              INTO :HCAMPO
+           END-EXEC
+           MOVE PAGEX TO XSQL16.
+           EXEC SQL
+               DECLARE CUR_PAG CURSOR FOR
+                   SELECT SYSPAGES FROM sysmappage
+                   WHERE NAME = :XSQL16
+                   ORDER BY ORD
+           END-EXEC
+           MOVE 'DECLARE CURSOR SYSMAPPAGE' TO OPERACION.
+           PERFORM SQLERRORES.
+           EXEC SQL 
+              OPEN CUR_PAG
+           END-EXEC
+           MOVE 'POSICIONARSE ' TO OPERACION.
+           PERFORM SQLERRORES.
+           MOVE 0 TO INDIFIN.
+           MOVE '##ENDPAGE##' TO PAGEA.
+           MOVE SPACES TO PAGEH.
+           IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
+           PERFORM UNTIL INDIFIN = 1
+              IF INDIFIN = 0
+                 EXEC SQL 
+                      FETCH CUR_PAG
+                 INTO :XSQL32
+                 END-EXEC
+      *          DISPLAY XSQL32
+                 MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
+                 PERFORM SQLERRORES
+                 IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
+                 ELSE 
+                     EXEC SQL 
+                         SELECT CONT FROM syspages
+                         WHERE PAGE = :XSQL32
+                     INTO 
+                        :PAGEH
+                     END-EXEC
+                     MOVE 'LECTURA SYSPAGES' TO OPERACION
+                     PERFORM SQLERRORES
+                     MOVE FUNCTION SUBSTITUTE (PAGEA, '##ENDPAGE##',
+                            PAGEH) TO PAGEH
+                     STRING FUNCTION TRIM (PAGEH)
+                            '##ENDPAGE##'
+                        INTO PAGEA
+               END-IF
+           END-PERFORM.
+           MOVE FUNCTION SUBSTITUTE (PAGEA, '##ENDPAGE##', ' ') 
+                TO PAGEH.
+           EXEC SQL
+               CLOSE CUR_PAG
+           END-EXEC
+           MOVE 'CIERRE CURSOR ' TO OPERACION.
+                 PERFORM SQLERRORES.
+           MOVE FUNCTION CURRENT-DATE TO DATETIME.
+           MOVE DATETIME(1:4) TO XSTAMP (7:4).
+           MOVE DATETIME(5:2) TO XSTAMP (4:2).
+           MOVE DATETIME(7:2) TO XSTAMP (1:2).
+           MOVE DATETIME(9:2) TO XSTAMP (12:2).
+           MOVE DATETIME(11:2) TO XSTAMP (15:2).
+           MOVE DATETIME(13:2) TO XSTAMP (18:2).
+           MOVE "-" TO XSTAMP (3:1).
+           MOVE "-" TO XSTAMP (6:1).
+           MOVE " " TO XSTAMP (11:1).
+           MOVE ":" TO XSTAMP (14:1).
+           MOVE ":" TO XSTAMP (17:1).
+           INSPECT PAGEH REPLACING 
+                 ALL "#######map######" BY PROGID.
+           INSPECT PAGEH REPLACING 
+                 ALL "######datetime#####" BY XSTAMP.
+           INSPECT PAGEH REPLACING 
+                 ALL "##############title#############" BY HCAMPO.
+           MOVE PAGEH TO PAGEA.
+
+        SQLERRORES.
+           MOVE SPACES TO RESULTADO.
+           IF SQLCODE < 0 
+                      DISPLAY OPERACION,  '*SQLSTATE='  SQLSTATE,
+                              ', *SQLCODE=' SQLCODE
+              IF SQLERRML > 0
+                 DISPLAY 'SQL ERROR MESSAGE:' SQLERRMC(1:SQLERRML)
+                 MOVE  SQLERRMC(1:SQLERRML) 
+                       TO RESULTADO
+              END-IF
+              MOVE SQLCODE TO RETURN-CODE
+              STOP RUN                                                           
+           ELSE IF SQLCODE > 0 AND NOT = 100
+                      DISPLAY 'SQLSTATE='  SQLSTATE,
+                              ', SQLCODE=' SQLCODE
+              IF SQLERRML > 0
+                 DISPLAY 'SQL WARNING MESSAGE:' SQLERRMC(1:SQLERRML)
+                 MOVE  SQLERRMC(1:SQLERRML)
+                       TO RESULTADO
+              END-IF
+           END-IF.
+           IF SQLCODE = 100
+              MOVE 'FIN DE TABLA' TO RESULTADO
+           END-IF.
+           MOVE 'COMMIT' TO BUFFER.
+           EXEC SQL 
+             EXECUTE IMMEDIATE :BUFFER
+           END-EXEC
+           .
+       END PROGRAM COBLOGIN.
+
