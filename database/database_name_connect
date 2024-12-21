@@ -1,0 +1,3 @@
+Currently we usr "cobolhtml" as database name. If you cange it remember to change on connect sting.
+Names for the driver in connect string may be found on odbcad32.exe "Drivers or controllers" for windows.
+Also on Lunix see /etc/odbcist.ini.
