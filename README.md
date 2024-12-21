@@ -6,4 +6,6 @@ As far I test only works with Apache server.
 
 ![image](https://github.com/user-attachments/assets/a7d18d33-4381-4f04-ad15-4424b0225975)
 ![image](https://github.com/user-attachments/assets/b3742ef4-5c6d-4593-9f8e-52b71e67bdcf)
+![image](https://github.com/user-attachments/assets/a12ac216-f4c9-46a7-b985-dff5501b3313)
+![image](https://github.com/user-attachments/assets/1bc12fa2-bd8e-4f99-a39f-fcc30efadca0)
 
