@@ -102,8 +102,8 @@
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=root;'
-                'PASSWORD=jordi;'
+                'USER=*****;'
+                'PASSWORD=*****;'
            INTO BUFFER
          EXEC SQL 
            CONNECT TO :BUFFER 
