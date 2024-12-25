@@ -70,6 +70,9 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+           05 LIMITE               PIC 9(10).
+           05 SALTAR               PIC 9(10).
+           05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
      
        PROCEDURE DIVISION.
@@ -94,8 +97,8 @@
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=*****;'
-                'PASSWORD=*****;'
+                'USER=root;'
+                'PASSWORD=jordi;'
            INTO BUFFER.
            EXEC SQL 
                CONNECT TO :BUFFER 
@@ -138,6 +141,9 @@
 
        SENDHTML.
             IF ACCTN = 'C' OR ACCTN = ' '
+              MOVE "CALL SENDPAGE" TO PAGETOSEND
+              MOVE 0 TO LIMITE
+              MOVE 0 TO SALTAR
               CALL "SENDPAGE" END-CALL
               MOVE PAGETOSEND TO PAGES
               PERFORM EMPTY-PAGE

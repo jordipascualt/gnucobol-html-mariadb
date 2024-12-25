@@ -21,10 +21,10 @@
            05 NROWS                PIC 9(12).
            05 HCAMPO               PIC X(32).
            05 XSQL32               PIC X(32).
-           05 BUSCAR1              PIC X(35).
            05 SESID                PIC X(32).
            05 LIMITE               PIC 9(10).
            05 SALTAR               PIC 9(10).
+           05 FILLPRG              PIC X(16).
        01  SYSFLD.
            05 IDFLD                PIC 9(11).
            05 TNXFLD               PIC 9(11).
@@ -33,18 +33,6 @@
            05 LENFLD               PIC 9(11).
            05 COMFLD               PIC X(128).
            05 VALFLD               PIC X(128).
-       01  USERS.
-           05 COMMENT              PIC X(128).
-           05 AGREE                PIC X.
-           05 AGE                  PIC X(16).
-           05 TIPO                 PIC X(16).
-           05 TIMEHMS              PIC X(8).
-           05 DATEDMY              PIC X(10).
-           05 PWD                  PIC X(32).
-           05 USERNAME             PIC X(32).
-           05 EMAIL                PIC X(32).
-           05 IDENT                PIC 9(11).
-           05 NAME                 PIC X(64).
        01  SYSCOMM.
            05 ACCTN                PIC X.
            05 PAGEX                PIC X(16).
@@ -58,7 +46,6 @@
        01  RESULTADO               PIC X(256).
        01  OPERACION               PIC X(50).
        01  NEWCODI                 PIC 9(12).
-       01  BUSCAR                  PIC X(32).
        01  BUTTONCK                PIC X(16).
 
        01  TABLA.
@@ -78,6 +65,18 @@
        01  ZSALTAR                 PIC ZZZZZZZZZ9.
        01  ZCODE                   PIC ZZZZZZZZZ9.
  
+       01  SYSCOMMALL              EXTERNAL.
+           05 SYSCOMMX.
+             07 ACCTNX             PIC X.
+             07 PAGEXX             PIC X(16).
+             07 IDETX              PIC X(11).
+             07 PAGEACTIVEX        PIC X.
+             07 PROGIDX            PIC X(16).
+           05 LIMITEX              PIC 9(10).
+           05 SALTARX              PIC 9(10).
+           05 BUSCAR               PIC X(32).
+           05 PAGETOSENDX          PIC X(63535).
+
       *  DD-MM-YYYY HH:MM:SS
       *  1234567890123456789
 
@@ -98,12 +97,13 @@
             MOVE 0 TO IDET
             MOVE 'N' TO PAGEACTIVE
             MOVE 'COBUSRLST.EXE' TO PROGID.
+           MOVE SYSCOMM TO SYSCOMMX.
            STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=*****;'
-                'PASSWORD=*****;'
+                'USER=root;'
+                'PASSWORD=jordi;'
            INTO BUFFER
          EXEC SQL 
            CONNECT TO :BUFFER 
@@ -119,6 +119,7 @@
          IF PAGEACTIVE = 'N'
             MOVE 0 TO SALTAR
             MOVE 14 TO LIMITE
+            MOVE SPACES TO BUSCAR
             PERFORM SENDPAGE
             PERFORM FILLPAGE
          ELSE 
@@ -146,6 +147,13 @@
             PERFORM FILLPAGE
          END-IF.
          GOBACK.
+       SENDPAGE.
+           MOVE "CALL SENDPAGE" TO PAGETOSENDX.
+           MOVE SALTAR TO SALTARX.
+           MOVE LIMITE TO LIMITEX.
+      *    DISPLAY LIMITEX, '-', SALTARX, '-', BUSCAR, '*'
+           CALL 'SENDPAGE'.
+           MOVE PAGETOSENDX TO PAGEH.
        READPAGE.
            MOVE PAGEX TO XSQL16.
            MOVE 0 TO XNUM12.
@@ -166,8 +174,7 @@
            MOVE 'POSICIONARSE ' TO OPERACION.
            PERFORM SQLERRORES.
            MOVE 0 TO INDIFIN.
-           MOVE SPACES TO AGE.
-           MOVE 'N' TO AGREE.
+           MOVE SPACES TO BUSCAR.
            IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
            PERFORM UNTIL INDIFIN = 1
               IF INDIFIN = 0
@@ -201,186 +208,17 @@
 
 
        FILLPAGE.
-         MOVE FUNCTION CURRENT-DATE TO DATETIME.
-         MOVE DATETIME(1:4) TO XSTAMP (7:4).
-         MOVE DATETIME(5:2) TO XSTAMP (4:2).
-         MOVE DATETIME(7:2) TO XSTAMP (1:2).
-         MOVE DATETIME(9:2) TO XSTAMP (12:2).
-         MOVE DATETIME(11:2) TO XSTAMP (15:2).
-         MOVE DATETIME(13:2) TO XSTAMP (18:2).
-         MOVE "-" TO XSTAMP (3:1).
-         MOVE "-" TO XSTAMP (6:1).
-         MOVE " " TO XSTAMP (11:1).
-         MOVE ":" TO XSTAMP (14:1).
-         MOVE ":" TO XSTAMP (17:1).
-
-
-         INSPECT PAGEH REPLACING 
-                 ALL "#######map######" BY PROGID.
-         INSPECT PAGEH REPLACING 
-                 ALL "######datetime#####" BY XSTAMP.
-         INSPECT PAGEH REPLACING 
-                 ALL "##############TITLE#############" BY HCAMPO.
-         MOVE LIMITE TO ZLIMITE.
          ADD 1 TO SALTAR.
          MOVE SALTAR TO ZSALTAR.
          SUBTRACT 1 FROM SALTAR.
+         MOVE LIMITE TO ZLIMITE.
          INSPECT PAGEH REPLACING 
                  ALL "##limite##" BY ZLIMITE.
          INSPECT PAGEH REPLACING 
                  ALL "##saltar##" BY ZSALTAR.
          DISPLAY FUNCTION TRIM (PAGEH). 
 
-       FILLROWS.
-           STRING "%", BUSCAR DELIMITED BY ' ', "%" INTO BUSCAR1.
-           EXEC SQL
-               DECLARE CUR_USR CURSOR FOR
-                   SELECT * FROM sysusers 
-                   WHERE NAME LIKE RTRIM(:BUSCAR1)
-                   ORDER BY USERNAME
-                   LIMIT :LIMITE OFFSET :SALTAR
-           END-EXEC
-           MOVE 'DECLARE CURSOR ' TO OPERACION.
-           PERFORM SQLERRORES.
-           EXEC SQL 
-              OPEN CUR_USR
-           END-EXEC
-           MOVE 'POSICIONARSE ' TO OPERACION.
-           PERFORM SQLERRORES.
-           MOVE 0 TO INDIFIN, IX.
-           MOVE SPACES TO RESULTADO.
-           MOVE 1 TO IT.
-           MOVE SPACES TO BUFFER
-           MOVE '##ENDPAGE##' TO PAGET.
-           IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
-           PERFORM UNTIL INDIFIN = 1
-              IF INDIFIN = 0
-                 EXEC SQL 
-                      FETCH CUR_USR
-                 INTO :IDENT, :NAME, :EMAIL, :USERNAME, :PWD,
-                      :DATEDMY, :TIMEHMS, :TIPO, :AGE, :AGREE, 
-                      :COMMENT
-                 END-EXEC
-                 MOVE 'LECTURA-NEXT' TO OPERACION
-                 PERFORM SQLERRORES
-                 IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
-                 ELSE ADD 1 TO IX
-                   MOVE SPACES TO ELEM (IT) 
-                   MOVE IDENT TO ZCODE
-                   STRING '<TR><TD STYLE="TEXT-ALIGN:CENTER">',
-                          '<A HREF="'
-                          'COBNEWUSR.EXE?',
-                          'RUSERS___________'
-                          IDENT,
-                          'NCOBNEWUSR.EXE___'
-                          '"', "'"
-                     ' class="btn btn-primary btn-xs" role="button">'
-                     '<span class="glyphicon glyphicon-edit"></span>'
-                        '</A></TD>'
-                        '<TD STYLE="TEXT-ALIGN:RIGHT">' 
-                        FUNCTION TRIM (ZCODE), '</TD>'
-                        '<TD>', FUNCTION TRIM (NAME), '</TD>'
-                        '<TD>', FUNCTION TRIM (USERNAME), '</TD>'
-                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
-                         FUNCTION TRIM (DATEDMY), '</TD>'
-                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
-                         FUNCTION TRIM (TIMEHMS), '</TD>'
-                        '<TD>', FUNCTION TRIM (TIPO), '</TD>'
-                        '<TD>', FUNCTION TRIM (AGE), '</TD>'
-                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
-                         FUNCTION TRIM (AGREE), '</TD>'
-                        '<TD>', FUNCTION TRIM (COMMENT), '</TD>'
-                        '</TR>'
-                        INTO ELEM (IT)   
-                        MOVE FUNCTION 
-                               SUBSTITUTE (PAGET, '##ENDPAGE##',
-                               ELEM (IT)) TO PAGET
-                        STRING FUNCTION TRIM (PAGET)
-                               '##ENDPAGE##'
-                        INTO PAGET
-                    ADD 1 TO IT
-                 END-IF
-           END-PERFORM.
-           EXEC SQL
-               CLOSE CUR_USR
-           END-EXEC
-           MOVE 'CIERRE CURSOR ' TO OPERACION.
-           PERFORM SQLERRORES.
-
-
-       SENDPAGE.
-      *    DISPLAY 'SENDPAGE'.
-      *    INSPECT SYSCOMM REPLACING ALL '_' BY ' '.
-
-           MOVE SPACES TO BUFFER.
-           MOVE PAGEX TO XSQL16, OPERACION.
-           EXEC SQL 
-              SELECT TITLE FROM sysmaps
-               WHERE NAME = :XSQL16
-              INTO :HCAMPO
-           END-EXEC
-           MOVE PAGEX TO XSQL16.
-      *     DISPLAY XSQL16.
-           EXEC SQL
-               DECLARE CUR_PAG CURSOR FOR
-                   SELECT SYSPAGES FROM sysmappage
-                   WHERE NAME = :XSQL16
-                   ORDER BY ORD
-           END-EXEC
-           MOVE 'DECLARE CURSOR SYSMAPPAGE' TO OPERACION.
-           PERFORM SQLERRORES.
-           EXEC SQL 
-              OPEN CUR_PAG
-           END-EXEC
-           MOVE 'POSICIONARSE ' TO OPERACION.
-           PERFORM SQLERRORES.
-           MOVE 0 TO INDIFIN.
-           MOVE '##ENDPAGE##' TO PAGEA.
-           MOVE SPACES TO PAGEH, RESULTADO.
-           IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
-           PERFORM UNTIL INDIFIN = 1
-              IF INDIFIN = 0
-                 EXEC SQL 
-                      FETCH CUR_PAG
-                 INTO :XSQL32
-                 END-EXEC
-                 MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
-                 PERFORM SQLERRORES
-                 IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
-                 ELSE 
-                     IF XSQL32 = '##inner_html_table##'
-                        PERFORM FILLROWS
-                        MOVE PAGET TO PAGEH
-                        MOVE SPACES TO XSQL32, RESULTADO
-                        MOVE 0 TO INDIFIN
-                     ELSE
-                        EXEC SQL 
-                            SELECT CONT FROM syspages
-                            WHERE PAGE = :XSQL32
-                        INTO 
-                           :PAGEH
-                        END-EXEC
-                        MOVE 'LECTURA SYSPAGES' TO OPERACION
-                        PERFORM SQLERRORES
-                     END-IF
-                        MOVE FUNCTION 
-                              SUBSTITUTE (PAGEA, '##ENDPAGE##',
-                               PAGEH) TO PAGES
-                        STRING FUNCTION TRIM (PAGES)
-                               '##ENDPAGE##'
-                        INTO PAGEA
-                     END-IF
-               END-IF
-           END-PERFORM.
-           MOVE FUNCTION SUBSTITUTE (PAGEA, '##ENDPAGE##', ' ') 
-                TO PAGEH.
-           EXEC SQL
-               CLOSE CUR_PAG
-           END-EXEC
-
-           MOVE 'CIERRE CURSOR ' TO OPERACION.
-           PERFORM SQLERRORES.
-
+ 
 
         SQLERRORES.
            MOVE SPACES TO RESULTADO.

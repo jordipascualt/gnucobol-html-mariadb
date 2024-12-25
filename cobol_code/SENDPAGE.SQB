@@ -16,6 +16,7 @@
            05 BUFFER               PIC X(512).
            05 XSQL1                PIC X.
            05 XSQL16               PIC X(16).
+           05 ASQL16               PIC X(16).
            05 XSQL32               PIC X(32).
            05 XNUM12               PIC 9(12).
            05 HCAMPO               PIC X(32).
@@ -68,7 +69,11 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+           05 LIMITES              PIC 9(10).
+           05 SALTARS              PIC 9(10).
+           05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
+
 
       *> ***************************************************************
        PROCEDURE DIVISION.
@@ -78,8 +83,8 @@
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=*****;'
-                'PASSWORD=*****;'
+                'USER=root;'
+                'PASSWORD=jordi;'
            INTO BUFFER.
            EXEC SQL 
              CONNECT TO :BUFFER 
@@ -102,11 +107,11 @@
                WHERE NAME = :XSQL16
               INTO :HCAMPO
            END-EXEC
-           MOVE PAGEX TO XSQL16.
+           MOVE PAGEX TO XSQL32.
            EXEC SQL
                DECLARE CUR_PAG CURSOR FOR
-                   SELECT SYSPAGES FROM sysmappage
-                   WHERE NAME = :XSQL16
+                   SELECT SYSPAGES, FILLPROG FROM sysmappage
+                   WHERE NAME = :XSQL32
                    ORDER BY ORD
            END-EXEC
            MOVE 'DECLARE CURSOR SYSMAPPAGE' TO OPERACION.
@@ -124,13 +129,27 @@
               IF INDIFIN = 0
                  EXEC SQL 
                       FETCH CUR_PAG
-                 INTO :XSQL32
+                 INTO :XSQL32, :ASQL16
                  END-EXEC
       *          DISPLAY XSQL32
                  MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
                  PERFORM SQLERRORES
                  IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
                  ELSE 
+                     IF XSQL32 = '##inner_html_table##'
+      *                  DISPLAY FILLPRG
+                        CALL ASQL16 END-CALL
+                        MOVE PAGETOSEND TO PAGEH
+                     ELSE
+                        EXEC SQL 
+                            SELECT CONT FROM syspages
+                            WHERE PAGE = :XSQL32
+                        INTO 
+                           :PAGEH
+                        END-EXEC
+                        MOVE 'LECTURA SYSPAGES' TO OPERACION
+                        PERFORM SQLERRORES
+                     END-IF
                      EXEC SQL 
                          SELECT CONT FROM syspages
                          WHERE PAGE = :XSQL32

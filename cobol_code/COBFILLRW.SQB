@@ -1,0 +1,220 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COBFILLRW.
+
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       WORKING-STORAGE SECTION.
+       EXEC SQL 
+           BEGIN DECLARE SECTION 
+       END-EXEC.
+       01  HOSTVARS.
+           05 BUFFER               PIC X(1024).
+           05 PAGEH                PIC X(65535).
+           05 XSQL1                PIC X.
+           05 XSQL16               PIC X(16).
+           05 XNUM12               PIC 9(12).
+           05 NROWS                PIC 9(12).
+           05 HCAMPO               PIC X(32).
+           05 XSQL32               PIC X(32).
+           05 BUSCAR1              PIC X(35).
+           05 SESID                PIC X(32).
+           05 LIMITE               PIC 9(10).
+           05 SALTAR               PIC 9(10).
+       01  USERS.
+           05 COMMENT              PIC X(128).
+           05 AGREE                PIC X.
+           05 AGE                  PIC X(16).
+           05 TIPO                 PIC X(16).
+           05 TIMEHMS              PIC X(8).
+           05 DATEDMY              PIC X(10).
+           05 PWD                  PIC X(32).
+           05 USERNAME             PIC X(32).
+           05 EMAIL                PIC X(32).
+           05 IDENT                PIC 9(11).
+           05 NAME                 PIC X(64).
+       EXEC SQL
+           END DECLARE SECTION 
+       END-EXEC.
+       01  RESULTADO               PIC X(256).
+       01  OPERACION               PIC X(50).
+       01  NEWCODI                 PIC 9(12).
+       01  TABLA.
+           05 ELEM                 PIC X(512) OCCURS 15.
+       01  IN-STATUS               PIC 99.
+       01  NEWLINE                 PIC X      VALUE X'0A'.
+       01  INDIFIN                 PIC 9 VALUE 0.
+       01  IX                      PIC 9999 VALUE 0.
+       01  IT                      PIC 99 VALUE 0.
+       01  ZCODE                   PIC ZZZZZZZZZ9.
+       01  PAGET                   PIC X(63535).
+
+       01  SYSCOMMALL              EXTERNAL.
+           05 SYSCOMM.
+             07 ACCTN              PIC X.
+             07 PAGEX              PIC X(16).
+             07 IDET               PIC X(11).
+             07 PAGEACTIVE         PIC X.
+             07 PROGID             PIC X(16).
+           05 LIMITES              PIC 9(10).
+           05 SALTARS              PIC 9(10).
+           05 BUSCAR               PIC X(32).
+           05 PAGETOSEND           PIC X(63535).
+ 
+      *  DD-MM-YYYY HH:MM:SS
+      *  1234567890123456789
+
+      *> ***************************************************************
+       PROCEDURE DIVISION.
+       COBFILLRW.
+           INSPECT SYSCOMM REPLACING ALL "_" BY " ".
+           IF ACCTN < '*' 
+              MOVE 'C' TO ACCTN
+              MOVE 'USRLST' TO PAGEX
+              MOVE 0 TO IDET
+              MOVE 'N' TO PAGEACTIVE
+              MOVE 'COBFILLRW.EXE' TO PROGID
+              MOVE 14 TO LIMITES
+              MOVE 0 TO SALTARS
+              MOVE SALTARS TO SALTAR.
+              MOVE LIMITES TO LIMITE.
+           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+                'SERVER=localhost;'
+                'PORT=3306;'
+                'DATABASE=cobolhtml;'
+                'USER=root;'
+                'PASSWORD=jordi;'
+           INTO BUFFER
+           EXEC SQL 
+             CONNECT TO :BUFFER 
+           END-EXEC
+           PERFORM SQLERRORES.
+           MOVE SPACES TO BUFFER.
+           MOVE "NUM ROWS" TO OPERACION.
+           EXEC SQL 
+              SELECT COUNT(*) FROM SYSUSERS
+              INTO :NROWS
+           END-EXEC
+           PERFORM SQLERRORES.
+           PERFORM FILLROWS.
+           INSPECT PAGET REPLACING ALL '##ENDPAGE##' BY SPACES.
+           MOVE PAGET TO PAGETOSEND.
+      *     DISPLAY FUNCTION TRIM(PAGETOSEND).
+           GOBACK.
+
+       FILLROWS.
+           MOVE LIMITES TO LIMITE.
+           MOVE SALTARS TO SALTAR.
+      *     DISPLAY LIMITE, '-', SALTAR, '-', BUSCAR1, '*'
+           STRING "%", BUSCAR DELIMITED BY ' ', "%" INTO BUSCAR1.
+           EXEC SQL
+               DECLARE CUR_USR CURSOR FOR
+                   SELECT * FROM sysusers 
+                   WHERE NAME LIKE RTRIM(:BUSCAR1)
+                   ORDER BY USERNAME
+                   LIMIT :LIMITE OFFSET :SALTAR
+           END-EXEC
+           MOVE 'DECLARE CURSOR ' TO OPERACION.
+           PERFORM SQLERRORES.
+           EXEC SQL 
+              OPEN CUR_USR
+           END-EXEC
+           MOVE 'POSICIONARSE ' TO OPERACION.
+           PERFORM SQLERRORES.
+           MOVE 0 TO INDIFIN, IX.
+           MOVE SPACES TO RESULTADO.
+           MOVE 1 TO IT.
+           MOVE SPACES TO BUFFER
+           MOVE '##ENDPAGE##' TO PAGET.
+           IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
+           PERFORM UNTIL INDIFIN = 1
+              IF INDIFIN = 0
+                 EXEC SQL 
+                      FETCH CUR_USR
+                 INTO :IDENT, :NAME, :EMAIL, :USERNAME, :PWD,
+                      :DATEDMY, :TIMEHMS, :TIPO, :AGE, :AGREE, 
+                      :COMMENT
+                 END-EXEC
+                 MOVE 'LECTURA-NEXT' TO OPERACION
+                 PERFORM SQLERRORES
+                 IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
+                 ELSE ADD 1 TO IX
+                   MOVE SPACES TO ELEM (IT) 
+                   MOVE IDENT TO ZCODE
+                   STRING '<TR><TD STYLE="TEXT-ALIGN:CENTER">',
+                          '<A HREF="'
+                          'COBNEWUSR.EXE?',
+                          'RUSERS___________'
+                          IDENT,
+                          'NCOBNEWUSR.EXE___'
+                          '"', "'"
+                     ' class="btn btn-primary btn-xs" role="button">'
+                     '<span class="glyphicon glyphicon-edit"></span>'
+                        '</A></TD>'
+                        '<TD STYLE="TEXT-ALIGN:RIGHT">' 
+                        FUNCTION TRIM (ZCODE), '</TD>'
+                        '<TD>', FUNCTION TRIM (NAME), '</TD>'
+                        '<TD>', FUNCTION TRIM (USERNAME), '</TD>'
+                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
+                         FUNCTION TRIM (DATEDMY), '</TD>'
+                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
+                         FUNCTION TRIM (TIMEHMS), '</TD>'
+                        '<TD>', FUNCTION TRIM (TIPO), '</TD>'
+                        '<TD>', FUNCTION TRIM (AGE), '</TD>'
+                        '<TD STYLE="TEXT-ALIGN:CENTER">', 
+                         FUNCTION TRIM (AGREE), '</TD>'
+                        '<TD>', FUNCTION TRIM (COMMENT), '</TD>'
+                        '</TR>'
+                        INTO ELEM (IT)   
+                        MOVE FUNCTION 
+                               SUBSTITUTE (PAGET, '##ENDPAGE##',
+                               ELEM (IT)) TO PAGET
+                        STRING FUNCTION TRIM (PAGET)
+                               '##ENDPAGE##'
+                        INTO PAGET
+                    ADD 1 TO IT
+                 END-IF
+           END-PERFORM.
+           EXEC SQL
+               CLOSE CUR_USR
+           END-EXEC
+           MOVE 'CIERRE CURSOR ' TO OPERACION.
+           PERFORM SQLERRORES.
+
+
+        SQLERRORES.
+           MOVE SPACES TO RESULTADO.
+           IF SQLCODE < 0 
+                      DISPLAY OPERACION,  '*SQLSTATE='  SQLSTATE,
+                              ', *SQLCODE=' SQLCODE
+              IF SQLERRML > 0
+                 DISPLAY 'SQL ERROR MESSAGE:' SQLERRMC(1:SQLERRML)
+                 MOVE  SQLERRMC(1:SQLERRML) 
+                       TO RESULTADO
+              END-IF
+              MOVE SQLCODE TO RETURN-CODE
+              STOP RUN                                                           
+           ELSE IF SQLCODE > 0 AND NOT = 100
+                      DISPLAY 'SQLSTATE='  SQLSTATE,
+                              ', SQLCODE=' SQLCODE
+              IF SQLERRML > 0
+                 DISPLAY 'SQL WARNING MESSAGE:' SQLERRMC(1:SQLERRML)
+                 MOVE  SQLERRMC(1:SQLERRML)
+                       TO RESULTADO
+              END-IF
+           END-IF.
+           IF SQLCODE = 100
+              MOVE 'FIN DE TABLA' TO RESULTADO
+           END-IF.
+           MOVE 'COMMIT' TO BUFFER.
+           EXEC SQL 
+             EXECUTE IMMEDIATE :BUFFER
+           END-EXEC
+           .
+
+       END PROGRAM COBFILLRW.
+
