@@ -7,7 +7,7 @@
     SENDPAGE.SQB: CAUTION, This is a .dll or .so object to collect all the page parts and build de HTNL page to send
     COBNEWUSR.SQB: Simple User management page with all CRUD operations.
     COBNEWPWD.SQB: Forgot password util.
-
+    COBFILLRW.SQB: Loade by SENDPAGE, fills de row table for list programs. (CAUTION .so or .dll)
 2.- The ODBC connect string:
     For windows (Tested Windows 10):
     (See odbcad32.exe, Drivers)
@@ -42,6 +42,7 @@
     copy C:\gnucobol64\%1.exe C:\apache24\cgi-bin\%1.exe
     del C:\gnucobol64\%1.exe 
 
+    - For shared objects (.so or .dll).
     C:\gnucobol64\x64\release\esqlOC.exe -static -o c:\gnucobol64\%1.cob c:\gnucobol64\%1.sqb
     C:\gnucobol64\bin\cobc.exe -m -o C:\gnucobol64\%1.dll -Q "C:\gnucobol64\x64\release\ocsql.lib" C:\gnucobol64\%1.cob
     del C:\gnucobol64\%1.cob
@@ -58,6 +59,7 @@
     rm $1.EXE
     rm $1.COB
 
+    - For shared objects (.so or .dll).
     export OCSQL_LOGLEVEL=0
     echo "precompiler. " $1.SQB
     esqlOC -o $1.COB $1.SQB
