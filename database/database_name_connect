@@ -7,6 +7,7 @@ Tables and usage:
 	sysfields -> Where to store/retrieve data from the browser (READPAGE and Main programs).
 	sysmappage -> Parts or pages to be included in a HTML page for a main program.
 	sysmaps -> Pages and titles.
-	syspages -> Parts of pages to build a overall HTNL page.
+	syspages -> Parts of pages to build a overall HTML page.
+	sysrowlock -> Table to maintain row locking.
 	sysusers -> User table, we include a select, radio bottuns and check-box to show the use.
 
