@@ -7,7 +7,7 @@
     SENDPAGE.SQB: CAUTION, This is a .dll or .so object to collect all the page parts and build de HTNL page to send
     COBNEWUSR.SQB: Simple User management page with all CRUD operations.
     COBNEWPWD.SQB: Forgot password util.
-    COBFILLRW.SQB: Loade by SENDPAGE, fills de row table for list programs. (CAUTION .so or .dll)
+    COBFILLRW.SQB: Loaded by SENDPAGE, fills de row table for list programs. (CAUTION .so or .dll)
 2.- The ODBC connect string:
     For windows (Tested Windows 10):
     (See odbcad32.exe, Drivers)
