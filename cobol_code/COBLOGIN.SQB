@@ -1,3 +1,11 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Login control.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBLOGIN.
 
@@ -20,7 +28,6 @@
            05 XNUM12               PIC 9(12).
            05 HCAMPO               PIC X(32).
            05 PWDFLD               PIC X(32).
-           05 USER                 PIC X(32).
            05 PAGEH                PIC X(63535).
        01  USERS.
            05 COMMENT              PIC X(128).
@@ -42,6 +49,14 @@
            05 LENFLD               PIC 9(11).
            05 COMFLD               PIC X(128).
            05 VALFLD               PIC X(128).
+       01  SYSCOMM.
+           05 ACCTN                PIC X.
+           05 PAGEX                PIC X(16).
+           05 IDET                 PIC X(11).
+           05 PAGEACTIVE           PIC X.
+           05 PROGID               PIC X(16).
+           05 USER                 PIC X(32).
+           05 SESSION              PIC X(32).
        EXEC SQL
            END DECLARE SECTION 
        END-EXEC.
@@ -59,19 +74,20 @@
        01  LASTTNX                 PIC 9(11).
        01  BUTTONCK                PIC X(128).
        01  PAGEA                   PIC X(63535).
-
+ 
        01  SYSCOMMALL              EXTERNAL.
-           05 SYSCOMM.
-             07 ACCTN              PIC X.
-             07 PAGEX              PIC X(16).
-             07 IDET               PIC X(11).
-             07 PAGEACTIVE         PIC X.
-             07 PROGID             PIC X(16).
+           05 SYSCOMMX.
+             07 ACCTNX             PIC X.
+             07 PAGEXX             PIC X(16).
+             07 IDETX              PIC X(11).
+             07 PAGEACTIVEX        PIC X.
+             07 PROGIDX            PIC X(16).
+             07 USERNX             PIC X(32).
+             07 SESSIONX           PIC X(32).
            05 LIMITE               PIC 9(10).
            05 SALTAR               PIC 9(10).
            05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
-
 
        PROCEDURE DIVISION.
        COBLOGIN.
@@ -80,9 +96,11 @@
              "Content-type: text/html"
              NEWLINE
            END-DISPLAY
-           MOVE SPACES TO SYSCOMM.
+           MOVE SPACES TO SYSCOMMALL.
+           MOVE 0 TO LIMITE, SALTAR.
            ACCEPT SYSCOMM FROM COMMAND-LINE.
            INSPECT SYSCOMM REPLACING ALL "_" BY " ".
+           MOVE SYSCOMM TO SYSCOMMX.
            IF ACCTN < '*' 
               MOVE 'C' TO ACCTN
               MOVE 'LOGIN' TO PAGEX
@@ -90,7 +108,7 @@
               MOVE 'N' TO PAGEACTIVE
               MOVE 'COBLOGIN.EXE' TO PROGID.
            MOVE 'CONNECT' TO OPERACION.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
@@ -109,20 +127,17 @@
        TOSENDPAGE.
            INSPECT SYSCOMM REPLACING ALL " " BY "_".
            MOVE 'Y' TO PAGEACTIVE.
-           MOVE 0 TO SALTAR.
-           MOVE 0 TO LIMITE.
+           MOVE SYSCOMM TO SYSCOMMX.
            MOVE "CALL SENDPAGE" TO PAGETOSEND.
            CALL "SENDPAGE".
            DISPLAY FUNCTION TRIM(PAGETOSEND).
 
        TOGETPAGE.
-           CALL "C$SLEEP" USING 1 END-CALL.
+           CALL "CBL_GC_NANOSLEEP" USING "500000000".
            MOVE PAGEX TO XSQL16.
-           MOVE 0 TO LASTTNX.
-           MOVE 0 TO TNXFLD.
            EXEC SQL
                DECLARE CUR_FLD CURSOR FOR
-                   SELECT CAMPO, VALOR, TRANCODE FROM sysfields
+                   SELECT CAMPO, VALOR FROM sysfields
                    WHERE MAPNAME = :XSQL16
            END-EXEC
            MOVE 'DECLARE CURSOR SYSFIELDS' TO OPERACION.
@@ -138,7 +153,7 @@
                  EXEC SQL 
                       FETCH CUR_FLD
                  INTO 
-                      :FLD, :VALFLD, TNXFLD
+                      :FLD, :VALFLD
                  END-EXEC
                  MOVE 'LECTURA-NEXT FLD' TO OPERACION
                  PERFORM SQLERRORES
@@ -175,19 +190,10 @@
 
       *   FOR DEBUGG.
       *   DISPLAY USER "-" USERNAME "-" PWDFLD, "-" PWD "-" RESULTADO.
+      *   STOP RUN.
 
          IF PWD = PWDFLD AND RESULTADO = SPACES
-            MOVE 'DELETE OLD FIELDS/USER' TO OPERACION
-            MOVE SPACES TO BUFFER
-            STRING "DELETE FROM sysfields WHERE user = '"
-                   FUNCTION TRIM (USERNAME) 
-                   "' or user < '*'"
-                   " or user = 'null';"
-            INTO BUFFER
-            EXEC SQL 
-               EXECUTE IMMEDIATE :BUFFER
-            END-EXEC
-            PERFORM SQLERRORES
+            PERFORM DELETEOLDERS
             MOVE 'C' TO ACCTN
             MOVE 0 TO IDET
             MOVE 'N' TO PAGEACTIVE
@@ -197,7 +203,6 @@
             STRING PROGID DELIMITED BY "_", 
                "?", SYSCOMM 
                INTO RESULTADO   
-      *     DOCUMENT.COOKIE = "USERNAME=USER NAME";
             STRING '<script>'
                    'document.cookie = "USERNAME='
                    FUNCTION TRIM(USERNAME)
@@ -210,6 +215,7 @@
             DISPLAY BUFFER
             STOP RUN
          ELSE
+            PERFORM DELETEOLDERS
             MOVE SPACES TO BUFFER
             MOVE 'C' TO ACCTN
             MOVE 0 TO IDET
@@ -225,12 +231,36 @@
             STRING '<script>'
                    'alert("USER OR PASSWORD NOT OK");'
                    'window.location.href = "'
-                   RESULTADO
+                    RESULTADO
                    '";'
                    '</script>'
               INTO BUFFER
             DISPLAY BUFFER.
          STOP RUN.
+       DELETEOLDERS.
+         MOVE 'DELETE OLD FIELDS/USER' TO OPERACION
+         MOVE SPACES TO BUFFER
+         STRING "DELETE FROM sysfields WHERE user = '"
+                   FUNCTION TRIM (USER) 
+                   "' or user < '*'"
+                   " or user = 'null'"
+                   " or user = 'nouser';"
+         INTO BUFFER
+         EXEC SQL 
+               EXECUTE IMMEDIATE :BUFFER
+         END-EXEC.
+         PERFORM SQLERRORES.
+         MOVE SPACES TO BUFFER.
+         STRING "DELETE FROM sysrowlock WHERE "
+               "user = '"
+               FUNCTION TRIM(USER)
+                 "'"
+         INTO BUFFER.
+         MOVE 'DELETE ROWLOCK' TO OPERACION.
+         EXEC SQL 
+            EXECUTE IMMEDIATE :BUFFER
+         END-EXEC
+         PERFORM SQLERRORES. 
 
        VALORES.
       *     DISPLAY FLD , "-", VALFLD, "-<BR>".
@@ -242,8 +272,9 @@
         SQLERRORES.
            MOVE SPACES TO RESULTADO.
            IF SQLCODE < 0 
-                      DISPLAY OPERACION,  '*SQLSTATE='  SQLSTATE,
-                              ', *SQLCODE=' SQLCODE
+                      DISPLAY PROGID, '-', OPERACION, 
+                             ' *SQLSTATE='  SQLSTATE,
+                             ' *SQLCODE=' SQLCODE
               IF SQLERRML > 0
                  DISPLAY 'SQL ERROR MESSAGE:' SQLERRMC(1:SQLERRML)
                  MOVE  SQLERRMC(1:SQLERRML) 

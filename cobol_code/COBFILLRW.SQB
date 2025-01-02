@@ -1,3 +1,12 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Fill de table rows in HTML.
+      *> CAUTION:   Must be compiled as .so or .dll object.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBFILLRW.
 
@@ -44,7 +53,7 @@
        01  OPERACION               PIC X(50).
        01  NEWCODI                 PIC 9(12).
        01  TABLA.
-           05 ELEM                 PIC X(512) OCCURS 15.
+           05 ELEM                 PIC X(1024) OCCURS 15.
        01  IN-STATUS               PIC 99.
        01  NEWLINE                 PIC X      VALUE X'0A'.
        01  INDIFIN                 PIC 9 VALUE 0.
@@ -52,6 +61,15 @@
        01  IT                      PIC 99 VALUE 0.
        01  ZCODE                   PIC ZZZZZZZZZ9.
        01  PAGET                   PIC X(63535).
+       01  SYSCOMMTOCALL.
+           05 SYSCOMM2.
+             07 ACCTN2             PIC X.
+             07 PAGEX2             PIC X(16).
+             07 IDET2              PIC X(11).
+             07 PAGEACTIVE2        PIC X.
+             07 PROGID2            PIC X(16).
+             07 USERN2             PIC X(32).
+             07 SESSION2           PIC X(32).
 
        01  SYSCOMMALL              EXTERNAL.
            05 SYSCOMM.
@@ -60,6 +78,8 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
            05 LIMITES              PIC 9(10).
            05 SALTARS              PIC 9(10).
            05 BUSCAR               PIC X(32).
@@ -82,7 +102,7 @@
               MOVE 0 TO SALTARS
               MOVE SALTARS TO SALTAR.
               MOVE LIMITES TO LIMITE.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
@@ -131,6 +151,11 @@
            MOVE SPACES TO BUFFER
            MOVE '##ENDPAGE##' TO PAGET.
            IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
+           MOVE SYSCOMM TO SYSCOMM2.
+           MOVE 'COBNEWUSR.EXE' TO PROGID2.
+           MOVE 'USERS' TO PAGEX2.
+           MOVE 'R' TO ACCTN2.
+           MOVE 'N' TO PAGEACTIVE2
            PERFORM UNTIL INDIFIN = 1
               IF INDIFIN = 0
                  EXEC SQL 
@@ -145,13 +170,13 @@
                  ELSE ADD 1 TO IX
                    MOVE SPACES TO ELEM (IT) 
                    MOVE IDENT TO ZCODE
+                   MOVE IDENT TO IDET2
+                   INSPECT SYSCOMM2 REPLACING ALL " " BY "_"
                    STRING '<TR><TD STYLE="TEXT-ALIGN:CENTER">',
                           '<A HREF="'
-                          'COBNEWUSR.EXE?',
-                          'RUSERS___________'
-                          IDENT,
-                          'NCOBNEWUSR.EXE___'
-                          '"', "'"
+                          'COBNEWUSR.EXE?'
+                          SYSCOMM2
+                          '"'
                      ' class="btn btn-primary btn-xs" role="button">'
                      '<span class="glyphicon glyphicon-edit"></span>'
                         '</A></TD>'

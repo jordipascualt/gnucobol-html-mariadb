@@ -1,3 +1,11 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Create a new password.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBNEWPWD.
        ENVIRONMENT DIVISION.
@@ -8,15 +16,26 @@
        EXEC SQL 
          BEGIN DECLARE SECTION 
        END-EXEC
+      *> ***************************************************************
+      *> HTML / SQL NEEDED FIELDS
+      *> ***************************************************************
+       01  HOSTVARS.
            05 BUFFER               PIC X(1024).
-           05 XSQL1                PIC X.
            05 XSQL16               PIC X(16).
            05 XSQL32               PIC X(32).
-           05 XNUM12               PIC 9(12).
+           05 XSESI                PIC X(32).
            05 HCAMPO               PIC X(32).
-           05 PWDFLD               PIC X(32).
            05 USER                 PIC X(32).
-           05 PAGEH                PIC X(65365).
+       01  SYSFLD.
+           05 IDFLD                PIC 9(11).
+           05 MAPFLD               PIC X(16).
+           05 FLD                  PIC X(32).
+           05 LENFLD               PIC 9(11).
+           05 COMFLD               PIC X(128).
+           05 VALFLD               PIC X(128).
+      *> ***************************************************************
+      *> ROW FOR TABLE FIELDS
+      *> ***************************************************************
        01  USERS.
            05 COMMENT              PIC X(128).
            05 AGREE                PIC X.
@@ -30,38 +49,19 @@
            05 EMAIL                PIC X(32).
            05 IDENT                PIC X(11).
            05 NAME                 PIC X(64).
-       01  SYSFLD.
-           05 IDFLD                PIC 9(11).
-           05 TNXFLD               PIC 9(11).
-           05 MAPFLD               PIC X(16).
-           05 FLD                  PIC X(32).
-           05 LENFLD               PIC 9(11).
-           05 COMFLD               PIC X(128).
-           05 VALFLD               PIC X(128).
        EXEC SQL
           END DECLARE SECTION 
        END-EXEC.
-       01  NEWCODI                 PIC 9(11).
-       01  WEB-STATUS              PIC 99.
+      *> ***************************************************************
+      *> WORKING NEEDED FIELDS
+      *> ***************************************************************
        01  RESULTADO               PIC X(256).
        01  OPERACION               PIC X(50).
        01  ALERTA                  PIC X(128).
-       01  newline                 PIC X value x'0a'.
-       01  PAGEA                   PIC X(63535).
+       01  NEWLINE                 PIC X VALUE X'0a'.
        01  INDIFIN                 PIC 9 VALUE 0.
-       01  IX                      PIC 9999 VALUE 0.
-       01  IT                      PIC 99 VALUE 0.
-       01  DATETIME                PIC X(21).
-       01  XSTAMP                  PIC X(19).
-       01  SES                     PIC X(32).
-       01  LASTTNX                 PIC 9(11).
        01  BUTTONCK                PIC X(128).
        01  PAGES                   PIC X(65365).
-
-       01  SYSCOMM2. 
-           05 FILLER               PIC X(17).
-           05 IDET2                PIC X(11).
-           05 FILLER               PIC X(17).
 
        01  SYSCOMMALL              EXTERNAL.
            05 SYSCOMM.
@@ -70,15 +70,24 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
+           05 LIMITE               PIC 9(10).
+           05 SALTAR               PIC 9(10).
+           05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
      
        PROCEDURE DIVISION.
        COBNEWPWD.
+      *> ***************************************************************
+      *> INITIALIZATION
       *> Always send out the Content-type before any other IO
-       display
+      *> INITIALIZE SYSCOMM FOR NO COMMAND LINE CONTENT
+      *> ***************************************************************
+       DISPLAY
            "Content-type: text/html"
-           newline
-       end-display
+           NEWLINE
+       END-DISPLAY
 
          MOVE SPACES TO SYSCOMM.
          ACCEPT SYSCOMM FROM COMMAND-LINE.
@@ -90,7 +99,10 @@
               MOVE 0 TO IDET
               MOVE 'N' TO PAGEACTIVE
               MOVE 'COBNEWPWD.EXE' TO PROGID.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+      *> ***************************************************************
+      *> DATABSE CONNECT.
+      *> ***************************************************************
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
@@ -101,7 +113,9 @@
                CONNECT TO :BUFFER 
            END-EXEC
            PERFORM SQLERRORES.
-
+      *> ***************************************************************
+      *> PROGRAM HTML LOGIC
+      *> ***************************************************************
            IF PAGEACTIVE NOT = 'Y'
                 PERFORM SENDHTML
            ELSE
@@ -124,18 +138,20 @@
                    '</script>'
               INTO BUFFER
             DISPLAY BUFFER
-
            END-IF. 
            STOP RUN.
-
+      *> ***************************************************************
+      *> READ PAGES DATA
+      *> ***************************************************************
        GETPAGES.
-           CALL "C$SLEEP" USING 1 END-CALL.
            PERFORM READPAGE.
            MOVE SPACES TO ALERTA.
            PERFORM CHANGEPWD
            MOVE "PASSWORD WAS SUCCESFULLY CHANGED." TO ALERTA.
 
-      
+      *> ***************************************************************
+      *> PROGRAM LOGIC HTML DATA LOADED
+      *> ***************************************************************
        CHANGEPWD.
            MOVE USERNAME TO XSQL32.
            MOVE "CHECK EMAIL" TO OPERACION.
@@ -209,15 +225,18 @@
              END-EXEC
              PERFORM SQLERRORES
            END-IF.
-
-
+      *> ***************************************************************
+      *> CALL TO BUILD AND SEND HTML PAGE
+      *> ***************************************************************
        SENDHTML.
             IF ACCTN = 'C' OR ACCTN = ' '
               CALL "SENDPAGE" END-CALL
               MOVE PAGETOSEND TO PAGES
               PERFORM EMPTY-PAGE
               DISPLAY FUNCTION TRIM (PAGES).
-           
+      *> ***************************************************************
+      *> FILL HTML PAGE FIELDS AS INITIAL EMPTY VALUES
+      *> ***************************************************************
         EMPTY-PAGE.
       *       DISPLAY "EMPTYPAGE".
             MOVE FUNCTION SUBSTITUTE (PAGES, '##name##"', '"') TO PAGES
@@ -228,17 +247,22 @@
             MOVE FUNCTION SUBSTITUTE (PAGES, '##pwd##"', '"') TO PAGES
             MOVE FUNCTION SUBSTITUTE (PAGES, '##rpwd##"', '"') TO PAGES.
 
-
+      *> ***************************************************************
+      *> READ HTML PAGE FIELDS
+      *> ***************************************************************
          READPAGE.
+           CALL "CBL_GC_NANOSLEEP" USING "500000000".
            MOVE PAGEX TO XSQL16.
-           MOVE 0 TO XNUM12.
+           MOVE USERN TO USER.
+           MOVE SESSION TO XSESI.
            EXEC SQL
                DECLARE CUR_FLD CURSOR FOR
-                   SELECT id, trancode, mapname, campo, 
+                   SELECT id, mapname, campo, 
                           lenght, comment, valor
                    FROM sysfields
                    WHERE mapname = :XSQL16
-                   AND trancode > :XNUM12
+                   AND user = :USER
+                   AND session = :XSESI
                    ORDER BY id
            END-EXEC
            MOVE 'DECLARE CURSOR sysfield' TO OPERACION.
@@ -256,7 +280,7 @@
               IF INDIFIN = 0
                  EXEC SQL 
                       FETCH CUR_FLD
-                 INTO :IDFLD, :TNXFLD, :MAPFLD, :FLD, :LENFLD,
+                 INTO :IDFLD, :MAPFLD, :FLD, :LENFLD,
                       :COMFLD, :VALFLD
                  END-EXEC
                  MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
@@ -271,37 +295,31 @@
            END-EXEC
            MOVE 'CIERRE CURSOR ' TO OPERACION.
                  PERFORM SQLERRORES.
-
+           MOVE SPACES TO BUFFER.
+           MOVE 'DELETE USED FIELDS' TO OPERACION.
+           STRING 'DELETE FROM sysfields WHERE '
+                   "mapname = '" XSQL16 
+                   "' AND user = '" USER
+                   "' AND session = '" XSESI
+                   "';"
+              INTO BUFFER.
+           EXEC SQL 
+                EXECUTE IMMEDIATE  :BUFFER
+           END-EXEC
+           PERFORM SQLERRORES.
+                  
+      *> ***************************************************************
+      *> MOVE HTML DATE TO ROW FIELDS
+      *> ***************************************************************
        MOVECAMPOS.
       *     DISPLAY FLD "-" VALFLD "<BR>".
-           IF FLD = 'SYSCOMM' 
-              MOVE VALFLD TO SYSCOMM2
-              MOVE IDET2 TO IDET.
-           IF FLD = 'id' MOVE VALFLD TO IDENT.
-           IF FLD = 'agree' 
-              IF VALFLD = 'on' 
-                 MOVE 'Y' TO AGREE
-              ELSE MOVE 'N' TO AGREE.
-           IF FLD = 'type' MOVE VALFLD TO TIPO.
-           IF FLD = 'timehms' MOVE VALFLD TO TIMEHMS.
-           IF FLD = 'datedmy' MOVE VALFLD TO DATEDMY.
            IF FLD = 'pwd' MOVE VALFLD TO PWD.
            IF FLD = 'rpwd' MOVE VALFLD TO RPWD.
            IF FLD = 'username' MOVE VALFLD TO USERNAME.
            IF FLD = 'email' MOVE VALFLD TO EMAIL.
-           IF FLD = 'name' MOVE VALFLD TO NAME.
-           IF FLD = 'comment' MOVE VALFLD TO COMMENT.
-           IF FLD = 'radio1' 
-              IF VALFLD = 'on' MOVE '01-20' TO AGE.
-           IF FLD = 'radio2' 
-              IF VALFLD = 'on' MOVE '21-30' TO AGE.
-           IF FLD = 'radio3' 
-              IF VALFLD = 'on' MOVE '31-40' TO AGE.
-           IF FLD = 'radio4' 
-              IF VALFLD = 'on' MOVE '41-60' TO AGE.
-           IF FLD = 'radio5' 
-              IF VALFLD = 'on' MOVE '> 61' TO AGE.
-
+      *> ***************************************************************
+      *> SQL ERROR 
+      *> ***************************************************************
         SQLERRORES.
            MOVE SPACES TO RESULTADO.
            IF SQLCODE < 0 
@@ -324,7 +342,7 @@
               END-IF
            END-IF.
            IF SQLCODE = 100
-              MOVE 'FIN DE TABLA' TO RESULTADO
+              MOVE 'END OF ROWS' TO RESULTADO
            END-IF.
            MOVE 'COMMIT' TO BUFFER.
            EXEC SQL 

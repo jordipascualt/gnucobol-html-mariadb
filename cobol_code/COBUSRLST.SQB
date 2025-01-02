@@ -1,3 +1,11 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Users List and edit Options.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBUSRLST.
 
@@ -40,6 +48,7 @@
            05 PAGEACTIVE           PIC X.
            05 PROGID               PIC X(16).
            05 USERSYS              PIC X(32).
+           05 SESSYS               PIC X(32).
        EXEC SQL
            END DECLARE SECTION 
        END-EXEC.
@@ -72,6 +81,8 @@
              07 IDETX              PIC X(11).
              07 PAGEACTIVEX        PIC X.
              07 PROGIDX            PIC X(16).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
            05 LIMITEX              PIC 9(10).
            05 SALTARX              PIC 9(10).
            05 BUSCAR               PIC X(32).
@@ -83,12 +94,12 @@
       *> ***************************************************************
        PROCEDURE DIVISION.
        COBUSRLST.
-
       *> ALWAYS SEND OUT THE CONTENT-TYPE BEFORE ANY OTHER IO
        DISPLAY
              "Content-type: text/html"
            NEWLINE
        END-DISPLAY
+       MOVE SPACES TO SYSCOMMALL.
        ACCEPT SYSCOMM FROM COMMAND-LINE.
          INSPECT SYSCOMM REPLACING ALL "_" BY " ".
          IF ACCTN < '*' 
@@ -98,12 +109,12 @@
             MOVE 'N' TO PAGEACTIVE
             MOVE 'COBUSRLST.EXE' TO PROGID.
            MOVE SYSCOMM TO SYSCOMMX.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=root;'
-                'PASSWORD=jordi;'
+                'USER=*****;'
+                'PASSWORD=*****;'
            INTO BUFFER
          EXEC SQL 
            CONNECT TO :BUFFER 
@@ -112,8 +123,8 @@
            MOVE SPACES TO BUFFER.
            MOVE "NUM ROWS" TO OPERACION.
            EXEC SQL 
-              SELECT COUNT(*) FROM SYSUSERS
-              INTO :NROWS
+              select count(*) from sysusers
+              into :NROWS
            END-EXEC
            PERFORM SQLERRORES.
          IF PAGEACTIVE = 'N'
@@ -123,7 +134,7 @@
             PERFORM SENDPAGE
             PERFORM FILLPAGE
          ELSE 
-            CALL "C$SLEEP" USING 1 END-CALL
+           CALL "CBL_GC_NANOSLEEP" USING "500000000"
             PERFORM READPAGE
             MOVE 14 TO LIMITE
             IF BUTTONCK = "back" 
@@ -156,14 +167,12 @@
            MOVE PAGETOSENDX TO PAGEH.
        READPAGE.
            MOVE PAGEX TO XSQL16.
-           MOVE 0 TO XNUM12.
            EXEC SQL
                DECLARE CUR_FLD CURSOR FOR
-                   SELECT ID, TRANCODE, MAPNAME, CAMPO, 
+                   SELECT ID, MAPNAME, CAMPO, 
                           LENGHT, COMMENT, VALOR
                    FROM sysfields
                    WHERE MAPNAME = :XSQL16
-                   AND TRANCODE > :XNUM12
                    ORDER BY ID
            END-EXEC
            MOVE 'DECLARE CURSOR SYSFIELDS' TO OPERACION.
@@ -180,7 +189,7 @@
               IF INDIFIN = 0
                  EXEC SQL 
                       FETCH CUR_FLD
-                 INTO :IDFLD, :TNXFLD, :MAPFLD, :FLD, :LENFLD,
+                 INTO :IDFLD, :MAPFLD, :FLD, :LENFLD,
                       :COMFLD, :VALFLD
                  END-EXEC
                  MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
@@ -203,9 +212,6 @@
            IF FLD = 'saltar' MOVE VALFLD TO SALTAR
               SUBTRACT 1 FROM SALTAR.
            IF FLD = 'buttonck' MOVE VALFLD TO BUTTONCK. 
-
-
-
 
        FILLPAGE.
          ADD 1 TO SALTAR.

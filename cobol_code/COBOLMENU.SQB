@@ -1,3 +1,11 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Menu sample.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBOLMENU.
        ENVIRONMENT DIVISION.
@@ -17,19 +25,6 @@
            05 PWDFLD               PIC X(32).
            05 USER                 PIC X(32).
            05 PAGEH                PIC X(65365).
-       01  USERS.
-           05 COMMENT              PIC X(128).
-           05 AGREE                PIC X.
-           05 AGE                  PIC X(16).
-           05 TIPO                 PIC X(16).
-           05 TIMEHMS              PIC X(8).
-           05 DATEDMY              PIC X(10).
-           05 PWD                  PIC X(32).
-           05 RPWD                 PIC X(32).
-           05 USERNAME             PIC X(32).
-           05 EMAIL                PIC X(32).
-           05 IDENT                PIC X(11).
-           05 NAME                 PIC X(64).
        01  SYSFLD.
            05 IDFLD                PIC 9(11).
            05 TNXFLD               PIC 9(11).
@@ -58,11 +53,6 @@
        01  BUTTONCK                PIC X(128).
        01  PAGES                   PIC X(65365).
 
-       01  SYSCOMM2. 
-           05 FILLER               PIC X(17).
-           05 IDET2                PIC X(11).
-           05 FILLER               PIC X(17).
-
        01  SYSCOMMALL              EXTERNAL.
            05 SYSCOMM.
              07 ACCTN              PIC X.
@@ -70,11 +60,13 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
            05 LIMITE               PIC 9(10).
            05 SALTAR               PIC 9(10).
            05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
-     
+
        PROCEDURE DIVISION.
        COBOLMENU.
       *> Always send out the Content-type before any other IO
@@ -83,7 +75,7 @@
            newline
        end-display
 
-         MOVE SPACES TO SYSCOMM.
+         MOVE SPACES TO SYSCOMMALL.
          ACCEPT SYSCOMM FROM COMMAND-LINE.
         
          INSPECT SYSCOMM REPLACING ALL "_" BY " ".
@@ -93,12 +85,12 @@
               MOVE 0 TO IDET
               MOVE 'N' TO PAGEACTIVE
               MOVE 'COBOLMENU.EXE' TO PROGID.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=root;'
-                'PASSWORD=jordi;'
+                'USER=*****;'
+                'PASSWORD=*****;'
            INTO BUFFER.
            EXEC SQL 
                CONNECT TO :BUFFER 
@@ -106,6 +98,7 @@
            PERFORM SQLERRORES.
 
            IF PAGEACTIVE NOT = 'Y'
+                PERFORM DELETEROWLOCK
                 PERFORM SENDHTML
            ELSE
               PERFORM GETPAGES
@@ -115,9 +108,20 @@
               MOVE 'LOGIN' TO PAGEX
               MOVE 'COBOLMENU.EXE' TO PROGID
               INSPECT SYSCOMM REPLACING ALL " " BY "_"
+              MOVE 'DELETE OLD FIELDS/USER' TO OPERACION
               MOVE SPACES TO BUFFER
- 
-              STRING '<script>'
+              STRING "DELETE FROM sysfields WHERE user = '"
+                   FUNCTION TRIM (USERN) 
+                   " or session = '"
+                   FUNCTION TRIM (SESSION)
+                   "';"
+              INTO BUFFER
+              EXEC SQL 
+                 EXECUTE IMMEDIATE :BUFFER
+              END-EXEC
+              PERFORM SQLERRORES
+              MOVE SPACES TO BUFFER
+               STRING '<script>'
                    'alert("'
                    FUNCTION TRIM (ALERTA)
                    '");'
@@ -133,11 +137,9 @@
            STOP RUN.
 
        GETPAGES.
-           CALL "C$SLEEP" USING 1 END-CALL.
+           CALL "CBL_GC_NANOSLEEP" USING "500000000".
            PERFORM READPAGE.
            MOVE SPACES TO ALERTA.   
-
-
 
        SENDHTML.
             IF ACCTN = 'C' OR ACCTN = ' '
@@ -146,30 +148,20 @@
               MOVE 0 TO SALTAR
               CALL "SENDPAGE" END-CALL
               MOVE PAGETOSEND TO PAGES
-              PERFORM EMPTY-PAGE
               DISPLAY FUNCTION TRIM (PAGES).
            
-        EMPTY-PAGE.
-      *       DISPLAY "EMPTYPAGE".
-            MOVE FUNCTION SUBSTITUTE (PAGES, '##name##"', '"') TO PAGES
-            MOVE FUNCTION SUBSTITUTE (PAGES, '##email##"', '"') 
-                 TO PAGES
-            MOVE FUNCTION SUBSTITUTE (PAGES, '##username##"', '"')
-                 TO PAGES
-            MOVE FUNCTION SUBSTITUTE (PAGES, '##pwd##"', '"') TO PAGES
-            MOVE FUNCTION SUBSTITUTE (PAGES, '##rpwd##"', '"') TO PAGES.
-
-
          READPAGE.
            MOVE PAGEX TO XSQL16.
-           MOVE 0 TO XNUM12.
+           MOVE SESSION TO XSQL32.
+           MOVE USERN TO USER.
            EXEC SQL
                DECLARE CUR_FLD CURSOR FOR
                    SELECT id, trancode, mapname, campo, 
                           lenght, comment, valor
                    FROM sysfields
                    WHERE mapname = :XSQL16
-                   AND trancode > :XNUM12
+                   AND session = :XSQL32
+                   AND user = :USER
                    ORDER BY id
            END-EXEC
            MOVE 'DECLARE CURSOR sysfield' TO OPERACION.
@@ -180,8 +172,6 @@
            MOVE 'POSICIONARSE ' TO OPERACION.
            PERFORM SQLERRORES.
            MOVE 0 TO INDIFIN.
-           MOVE SPACES TO AGE.
-           MOVE 'N' TO AGREE.
            IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN.
            PERFORM UNTIL INDIFIN = 1
               IF INDIFIN = 0
@@ -193,7 +183,6 @@
                  MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
                  PERFORM SQLERRORES
                  IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
-                 ELSE PERFORM MOVECAMPOS
                  END-IF 
                END-IF
            END-PERFORM.
@@ -203,35 +192,20 @@
            MOVE 'CIERRE CURSOR ' TO OPERACION.
                  PERFORM SQLERRORES.
 
-       MOVECAMPOS.
-      *     DISPLAY FLD "-" VALFLD "<BR>".
-           IF FLD = 'SYSCOMM' 
-              MOVE VALFLD TO SYSCOMM2
-              MOVE IDET2 TO IDET.
-           IF FLD = 'id' MOVE VALFLD TO IDENT.
-           IF FLD = 'agree' 
-              IF VALFLD = 'on' 
-                 MOVE 'Y' TO AGREE
-              ELSE MOVE 'N' TO AGREE.
-           IF FLD = 'type' MOVE VALFLD TO TIPO.
-           IF FLD = 'timehms' MOVE VALFLD TO TIMEHMS.
-           IF FLD = 'datedmy' MOVE VALFLD TO DATEDMY.
-           IF FLD = 'pwd' MOVE VALFLD TO PWD.
-           IF FLD = 'rpwd' MOVE VALFLD TO RPWD.
-           IF FLD = 'username' MOVE VALFLD TO USERNAME.
-           IF FLD = 'email' MOVE VALFLD TO EMAIL.
-           IF FLD = 'name' MOVE VALFLD TO NAME.
-           IF FLD = 'comment' MOVE VALFLD TO COMMENT.
-           IF FLD = 'radio1' 
-              IF VALFLD = 'on' MOVE '01-20' TO AGE.
-           IF FLD = 'radio2' 
-              IF VALFLD = 'on' MOVE '21-30' TO AGE.
-           IF FLD = 'radio3' 
-              IF VALFLD = 'on' MOVE '31-40' TO AGE.
-           IF FLD = 'radio4' 
-              IF VALFLD = 'on' MOVE '41-60' TO AGE.
-           IF FLD = 'radio5' 
-              IF VALFLD = 'on' MOVE '> 61' TO AGE.
+        DELETEROWLOCK.
+           MOVE SPACES TO BUFFER.
+           STRING "DELETE FROM sysrowlock WHERE "
+               "user = '"
+               FUNCTION TRIM(USERN)
+               "' AND session = '"
+               SESSION
+                "'"
+           INTO BUFFER.
+           MOVE 'DELETE ROWLOCK' TO OPERACION.
+           EXEC SQL 
+             EXECUTE IMMEDIATE :BUFFER
+          END-EXEC
+           PERFORM SQLERRORES. 
 
         SQLERRORES.
            MOVE SPACES TO RESULTADO.

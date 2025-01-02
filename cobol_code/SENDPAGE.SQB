@@ -1,3 +1,12 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Build and prepare the HTML page.
+      *> CAUTION:   Must be compiled as .so or .dll object.
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. SENDPAGE.
 
@@ -69,8 +78,10 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
-           05 LIMITES              PIC 9(10).
-           05 SALTARS              PIC 9(10).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
+           05 LIMITE               PIC 9(10).
+           05 SALTAR               PIC 9(10).
            05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
 
@@ -79,12 +90,12 @@
        PROCEDURE DIVISION.
        SENDPAGE.
            MOVE 'CONNECT' TO OPERACION.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+           STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=root;'
-                'PASSWORD=jordi;'
+                'USER=*****;'
+                'PASSWORD=*****;'
            INTO BUFFER.
            EXEC SQL 
              CONNECT TO :BUFFER 
@@ -136,8 +147,7 @@
                  PERFORM SQLERRORES
                  IF RESULTADO NOT = SPACES MOVE 1 TO INDIFIN
                  ELSE 
-                     IF XSQL32 = '##inner_html_table##'
-      *                  DISPLAY FILLPRG
+                     IF ASQL16 > '*'
                         CALL ASQL16 END-CALL
                         MOVE PAGETOSEND TO PAGEH
                      ELSE

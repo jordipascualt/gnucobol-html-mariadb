@@ -1,3 +1,11 @@
+      *> ***************************************************************
+      *> Author:    Jordi Pascual
+      *> About:     GNUCobol + HTML + MariaDB (Mysql).
+      *> Date:      dec-2024
+      *> License:   Public Domain 
+      *> Usage:     Users Maintemance (CRUD).
+      *> https://github.com/jordipascualt/gnucobol-html-mariadb
+      *> ***************************************************************
        IDENTIFICATION DIVISION.
        PROGRAM-ID. COBNEWUSR.
        ENVIRONMENT DIVISION.
@@ -8,6 +16,7 @@
        EXEC SQL 
          BEGIN DECLARE SECTION 
        END-EXEC
+       01  HOSTVARS.
            05 BUFFER               PIC X(1024).
            05 XSQL1                PIC X.
            05 XSQL16               PIC X(16).
@@ -17,6 +26,9 @@
            05 PWDFLD               PIC X(32).
            05 USER                 PIC X(32).
            05 PAGEH                PIC X(65365).
+           05 SESIX                PIC X(32).
+           05 TABLA                PIC X(18).
+
        01  USERS.
            05 COMMENT              PIC X(128).
            05 AGREE                PIC X.
@@ -38,6 +50,13 @@
            05 LENFLD               PIC 9(11).
            05 COMFLD               PIC X(128).
            05 VALFLD               PIC X(128).
+       01  ROWLOCK.
+           05 IDRWL                PIC 9(11).
+           05 TABRWL               PIC X(32).
+           05 RWRWL                PIC 9(11).
+           05 USRRWL               PIC X(32).
+           05 SESRWL               PIC X(32).
+           05 STARWL               PIC X(18).
        EXEC SQL
           END DECLARE SECTION 
        END-EXEC.
@@ -45,7 +64,7 @@
        01  WEB-STATUS              PIC 99.
        01  RESULTADO               PIC X(256).
        01  OPERACION               PIC X(50).
-       01  ALERTA                  PIC X(128).
+       01  ALERTA                  PIC X(256).
        01  newline                 PIC X value x'0a'.
        01  PAGEA                   PIC X(63535).
        01  INDIFIN                 PIC 9 VALUE 0.
@@ -70,7 +89,13 @@
              07 IDET               PIC X(11).
              07 PAGEACTIVE         PIC X.
              07 PROGID             PIC X(16).
+             07 USERN              PIC X(32).
+             07 SESSION            PIC X(32).
+           05 LIMITE               PIC 9(10).
+           05 SALTAR               PIC 9(10).
+           05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
+
      
        PROCEDURE DIVISION.
        COBNEWUSR.
@@ -81,6 +106,7 @@
        end-display
 
          MOVE SPACES TO SYSCOMM.
+         MOVE "sysusers" TO TABLA.
          ACCEPT SYSCOMM FROM COMMAND-LINE.
       *   DISPLAY SYSCOMM.
          INSPECT SYSCOMM REPLACING ALL "_" BY " ".
@@ -90,22 +116,51 @@
             MOVE 0 TO IDET
             MOVE 'N' TO PAGEACTIVE
             MOVE 'COBNEWUSR.EXE' TO PROGID.
-           STRING 'DRIVER={MariaDB ODBC 3.2 Driver};'
+         STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
                 'DATABASE=cobolhtml;'
-                'USER=root;'
-                'PASSWORD=jordi;'
-           INTO BUFFER.
-           EXEC SQL 
-             CONNECT TO :BUFFER 
-           END-EXEC
-           PERFORM SQLERRORES.
+                'USER=*****;'
+                'PASSWORD=*****;'
+         INTO BUFFER.
+         EXEC SQL 
+           CONNECT TO :BUFFER 
+         END-EXEC
+         PERFORM SQLERRORES.
+         MOVE SPACES TO PAGETOSEND.
+         MOVE SPACES TO ALERTA, STARWL, BUFFER.
+         PERFORM CHECKROWLOCK.
+           IF STARWL > '*'
+              STRING '* THE INFORMATION REQUESTED IS LOCKED'
+                     ' BY USER: '
+                     FUNCTION TRIM(USRRWL), '\n SESSION: ', SESRWL 
+                     '\n ON: ' STARWL
+                     '\n * PLEASE AKS THE USER TO UNLOCK'
+                      ' OR TRY AGAIN LATER.'
+              INTO ALERTA
+              MOVE 'COBUSRLST.EXE' TO PROGID
+              MOVE 'USRLST' TO PAGEX
+              MOVE 'L' TO ACCTN
+              INSPECT SYSCOMM REPLACING ALL ' ' BY '_'
+              STRING '<script>'
+                   'alert("'
+                   FUNCTION TRIM (ALERTA)
+                   '");'
+                   newline
+                   'window.location.href = "/cgi-bin/COBUSRLST.EXE?'
+                   SYSCOMM
+                   '";'
+                   '</script>'
+              INTO BUFFER
+              DISPLAY BUFFER
+              STOP RUN
+           END-IF.
 
            IF PAGEACTIVE NOT = 'Y'
-                PERFORM SENDHTML
+              PERFORM CREATEROWLOCK
+              PERFORM SENDHTML
            ELSE
-              CALL "C$SLEEP" USING 1 END-CALL
+              CALL "CBL_GC_NANOSLEEP" USING "500000000"
               PERFORM GETPAGES
               MOVE 'L' TO ACCTN
               MOVE 0 TO IDET
@@ -139,8 +194,6 @@
               TO ALERTA.
            IF ACCTN = 'C' PERFORM CREATEUSR
               MOVE "USER WAS SUCCESFULLY CREATED." TO ALERTA.
-
-
 
        DELETEUSR.
            MOVE SPACES TO BUFFER.
@@ -241,12 +294,14 @@
        FILL-PAGE.
       *       DISPLAY "FILLPAGE".
            MOVE FUNCTION NUMVAL (IDET) TO XNUM12
+           MOVE 'READ SYSUSERS' TO OPERACION
            EXEC SQL 
               SELECT * from sysusers
                where id = :XNUM12
               into :IDENT, :NAME, :EMAIL, :USERNAME, :PWD,
                    :DATEDMY, :TIMEHMS, :TIPO, :AGE, :AGREE, :COMMENT
            END-EXEC
+           PERFORM SQLERRORES
            MOVE FUNCTION SUBSTITUTE 
                 (PAGES, '##id##', FUNCTION TRIM(IDENT)) TO PAGES
            MOVE FUNCTION SUBSTITUTE 
@@ -361,14 +416,14 @@
 
          READPAGE.
            MOVE PAGEX TO XSQL16.
-           MOVE 0 TO XNUM12.
+           MOVE SESSION TO SESIX.
            EXEC SQL
                DECLARE CUR_FLD CURSOR FOR
-                   SELECT id, trancode, mapname, campo, 
+                   SELECT id, mapname, campo, 
                           lenght, comment, valor
                    FROM sysfields
                    WHERE mapname = :XSQL16
-                   AND trancode > :XNUM12
+                   AND SESSION = :SESIX
                    ORDER BY id
            END-EXEC
            MOVE 'DECLARE CURSOR sysfield' TO OPERACION.
@@ -386,7 +441,7 @@
               IF INDIFIN = 0
                  EXEC SQL 
                       FETCH CUR_FLD
-                 INTO :IDFLD, :TNXFLD, :MAPFLD, :FLD, :LENFLD,
+                 INTO :IDFLD, :MAPFLD, :FLD, :LENFLD,
                       :COMFLD, :VALFLD
                  END-EXEC
                  MOVE 'LECTURA-NEXT MAPPAGE' TO OPERACION
@@ -432,6 +487,40 @@
            IF FLD = 'radio5' 
               IF VALFLD = 'on' MOVE '> 61' TO AGE.
 
+        CHECKROWLOCK.
+           MOVE SPACES TO BUFFER.
+           MOVE 'READ SYSROWLOCK' TO OPERACION.
+           MOVE USERN TO USER.
+           MOVE IDET TO IDFLD.
+           MOVE SPACES TO STARWL, USRRWL, SESRWL.
+           MOVE SPACES TO RESULTADO.
+           EXEC SQL 
+              SELECT * FROM sysrowlock
+                WHERE user = :USER
+                AND rowid = :IDFLD
+                AND tabla = :TABLA
+              INTO :IDRWL, :TABRWL, :RWRWL, :USRRWL, :SESRWL, :STARWL
+           END-EXEC
+           PERFORM SQLERRORES.
+      *     DISPLAY "CHECKROWLOCK:", USER, IDFLD, TABLA STARWL.
+
+        CREATEROWLOCK.
+           MOVE SPACES TO BUFFER.
+           STRING "INSERT INTO sysrowlock VALUES (0,'"
+               FUNCTION TRIM(TABLA), "','"
+               IDET, "','"
+               FUNCTION TRIM(USERN), "','"
+               FUNCTION TRIM(SESSION), "','"
+               FUNCTION FORMATTED-CURRENT-DATE("YYYYMMDDThhmmss.ss"), 
+               "');"
+           INTO BUFFER.
+           MOVE 'CREATE ROWLOCK' TO OPERACION.
+           EXEC SQL 
+             EXECUTE IMMEDIATE :BUFFER
+           END-EXEC
+           PERFORM SQLERRORES.
+      *     DISPLAY "CREATEROWLOCK:", USERN, IDET, TABLA SESSION.
+
         SQLERRORES.
            MOVE SPACES TO RESULTADO.
            IF SQLCODE < 0 
@@ -445,7 +534,7 @@
               MOVE SQLCODE TO RETURN-CODE
               STOP RUN                                                           
            ELSE IF SQLCODE > 0 AND NOT = 100
-                      DISPLAY 'SQLSTATE='  SQLSTATE,
+                      DISPLAY OPERACION, 'SQLSTATE='  SQLSTATE,
                               ', SQLCODE=' SQLCODE
               IF SQLERRML > 0
                  DISPLAY 'SQL Warning message:' SQLERRMC(1:SQLERRML)
