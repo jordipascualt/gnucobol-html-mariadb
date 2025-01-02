@@ -16,16 +16,17 @@
        EXEC SQL 
          BEGIN DECLARE SECTION 
        END-EXEC
+      *> ***************************************************************
+      *> HTML / SQL NEEDED FIELDS
+      *> ***************************************************************
        01  HOSTVARS.
            05 BUFFER               PIC X(1024).
-           05 XSQL1                PIC X.
            05 XSQL16               PIC X(16).
            05 XSQL32               PIC X(32).
            05 XNUM12               PIC 9(12).
            05 HCAMPO               PIC X(32).
            05 PWDFLD               PIC X(32).
            05 USER                 PIC X(32).
-           05 PAGEH                PIC X(65365).
            05 SESIX                PIC X(32).
            05 TABLA                PIC X(18).
 
@@ -60,28 +61,28 @@
        EXEC SQL
           END DECLARE SECTION 
        END-EXEC.
-       01  NEWCODI                 PIC 9(11).
+      *> ***************************************************************
+      *> WORKING NEEDED FIELDS
+      *> ***************************************************************
        01  WEB-STATUS              PIC 99.
        01  RESULTADO               PIC X(256).
        01  OPERACION               PIC X(50).
        01  ALERTA                  PIC X(256).
-       01  newline                 PIC X value x'0a'.
-       01  PAGEA                   PIC X(63535).
+       01  NEWLINE                 PIC X value x'0a'.
        01  INDIFIN                 PIC 9 VALUE 0.
-       01  IX                      PIC 9999 VALUE 0.
-       01  IT                      PIC 99 VALUE 0.
-       01  DATETIME                PIC X(21).
-       01  XSTAMP                  PIC X(19).
-       01  SES                     PIC X(32).
-       01  LASTTNX                 PIC 9(11).
-       01  BUTTONCK                PIC X(128).
        01  PAGES                   PIC X(65365).
+       01  ERRORMSG                PIC X(128).
+       01  ERRORMAIL               PIC X(64).
+       01  ERRORPWD                PIC X(64).
+       01  IX                      PIC 99.
 
        01  SYSCOMM2. 
            05 FILLER               PIC X(17).
            05 IDET2                PIC X(11).
            05 FILLER               PIC X(17).
-
+      *> ***************************************************************
+      *> COMMUNICATION AREAS
+      *> ***************************************************************
        01  SYSCOMMALL              EXTERNAL.
            05 SYSCOMM.
              07 ACCTN              PIC X.
@@ -96,13 +97,15 @@
            05 BUSCAR               PIC X(32).
            05 PAGETOSEND           PIC X(63535).
 
-     
+      *> ***************************************************************
+      *> PROCEDURE AND INITIALIZATION
+      *> ***************************************************************
        PROCEDURE DIVISION.
        COBNEWUSR.
       *> Always send out the Content-type before any other IO
        display
            "Content-type: text/html"
-           newline
+           NEWLINE
        end-display
 
          MOVE SPACES TO SYSCOMM.
@@ -116,6 +119,9 @@
             MOVE 0 TO IDET
             MOVE 'N' TO PAGEACTIVE
             MOVE 'COBNEWUSR.EXE' TO PROGID.
+      *> ***************************************************************
+      *> DB CONNECT
+      *> ***************************************************************
          STRING 'DRIVER={MariaDB};'
                 'SERVER=localhost;'
                 'PORT=3306;'
@@ -129,6 +135,9 @@
          PERFORM SQLERRORES.
          MOVE SPACES TO PAGETOSEND.
          MOVE SPACES TO ALERTA, STARWL, BUFFER.
+      *> ***************************************************************
+      *> FIRST CHECK FOR ROWWLOCK
+      *> ***************************************************************
          PERFORM CHECKROWLOCK.
            IF STARWL > '*'
               STRING '* THE INFORMATION REQUESTED IS LOCKED'
@@ -146,7 +155,7 @@
                    'alert("'
                    FUNCTION TRIM (ALERTA)
                    '");'
-                   newline
+                   NEWLINE
                    'window.location.href = "/cgi-bin/COBUSRLST.EXE?'
                    SYSCOMM
                    '";'
@@ -155,7 +164,9 @@
               DISPLAY BUFFER
               STOP RUN
            END-IF.
-
+      *> ***************************************************************
+      *> PROCEDURE WHEN NO LOCK FIND
+      *> ***************************************************************
            IF PAGEACTIVE NOT = 'Y'
               PERFORM CREATEROWLOCK
               PERFORM SENDHTML
@@ -173,7 +184,7 @@
                    'alert("'
                    FUNCTION TRIM (ALERTA)
                    '");'
-                   newline
+                   NEWLINE
                    'window.location.href = "/cgi-bin/COBUSRLST.EXE?'
                    SYSCOMM
                    '";'
@@ -182,10 +193,12 @@
               DISPLAY BUFFER
            END-IF. 
            STOP RUN.
-
+      *> ***************************************************************
+      *> GET DE PAGE AND PROGRAM LOGIC
+      *> ***************************************************************
        GETPAGES.
+           MOVE SPACES TO ERRORMSG.
            PERFORM READPAGE.
-      *     DISPLAY 'GETPAGES ' ACCTN, SYSCOMM END-DISPLAY.
            MOVE SPACES TO ALERTA.
            IF ACCTN = 'D' PERFORM DELETEUSR
               MOVE "USER WAS DELETED." TO ALERTA.
@@ -205,11 +218,33 @@
               EXECUTE IMMEDIATE :BUFFER
            END-EXEC
            PERFORM SQLERRORES.
+           PERFORM DELETEROWLOCK.
            
        UPDATEUSR.
-      *     DISPLAY 'UPDATE ', IDET.
-           MOVE SPACES TO BUFFER.
-           STRING "UPDATE sysusers SET "
+           PERFORM VALIDATEALL.
+           IF ERRORMSG > '*' 
+              MOVE 'L' TO ACCTN
+              MOVE 0 TO IDET
+              MOVE 'N' TO PAGEACTIVE
+              MOVE 'USRLST' TO PAGEX
+              MOVE 'COBUSRLST.EXE' TO PROGID
+              INSPECT SYSCOMM REPLACING ALL " " BY "_"
+              MOVE SPACES TO BUFFER
+              MOVE ERRORMSG TO ALERTA
+              STRING '<script>'
+                   'alert("'
+                   FUNCTION TRIM (ALERTA)
+                   '");'
+                   NEWLINE
+                   'window.location.href = "/cgi-bin/COBUSRLST.EXE?'
+                   SYSCOMM
+                   '";'
+                   '</script>'
+              INTO BUFFER
+              DISPLAY BUFFER
+           ELSE
+              MOVE SPACES TO BUFFER
+              STRING "UPDATE sysusers SET "
                 "name = '" FUNCTION TRIM(NAME), "', "
                 "email = '" FUNCTION TRIM(EMAIL), "', "
                 "username = '" FUNCTION TRIM(USERNAME), "',"
@@ -220,18 +255,18 @@
                 "timehms = '" FUNCTION TRIM(TIMEHMS), "',"
                 "datedmy = '" FUNCTION TRIM(DATEDMY), "'"
                 " WHERE id = '", IDENT , "'"
-                INTO BUFFER.
-           MOVE 'UPDATE USER' TO OPERACION.
-      *     DISPLAY FUNCTION TRIM(BUFFER).
-           EXEC SQL 
-              EXECUTE IMMEDIATE :BUFFER
-           END-EXEC
-           PERFORM SQLERRORES.
-
+                INTO BUFFER
+             MOVE 'UPDATE USER' TO OPERACION
+             EXEC SQL 
+                EXECUTE IMMEDIATE :BUFFER
+             END-EXEC
+             PERFORM SQLERRORES
+             PERFORM DELETEROWLOCK
+           END-IF.   
            
        CREATEUSR.
-      *     DISPLAY 'CREATE'.
-           IF PWD NOT = RPWD
+           PERFORM VALIDATEALL.
+           IF ERRORMSG NOT = SPACES 
               MOVE 'L' TO ACCTN
               MOVE 0 TO IDET
               MOVE 'N' TO PAGEACTIVE
@@ -239,20 +274,18 @@
               MOVE 'COBUSRLST.EXE' TO PROGID
               INSPECT SYSCOMM REPLACING ALL " " BY "_"
               MOVE SPACES TO BUFFER
-              MOVE 'PASSWORDS ARE DIFFERENT, USER CREATE CANCELLED'
-                   TO ALERTA
+              MOVE ERRORMSG TO ALERTA
               STRING '<script>'
                    'alert("'
                    FUNCTION TRIM (ALERTA)
                    '");'
+                   NEWLINE
+                   'window.location.href = "/cgi-bin/COBUSRLST.EXE?'
+                   SYSCOMM
+                   '";'
                    '</script>'
-                   '<a href="'
-                   PROGID DELIMITED BY "_", 
-                    "?", SYSCOMM,
-                   '">Back to Users List.</a>'
               INTO BUFFER
               DISPLAY BUFFER
-              STOP RUN
            ELSE
              MOVE SPACES TO BUFFER
              STRING "INSERT INTO sysusers VALUES (0,"
@@ -268,14 +301,34 @@
               "'" FUNCTION TRIM(COMMENT) "')" 
                 INTO BUFFER
              MOVE 'CREATE USER' TO OPERACION
-      *      DISPLAY FUNCTION TRIM(BUFFER)
              EXEC SQL 
               EXECUTE IMMEDIATE :BUFFER
              END-EXEC
              PERFORM SQLERRORES
            END-IF.
+      *> ***************************************************************
+      *> VALIDATE DATA.
+      *> ***************************************************************
+       VALIDATEALL.
+           PERFORM VALIDATEPWD.
+           PERFORM VALIDATEMAIL.
+           STRING ERRORMAIL DELIMITED BY '  '
+                   ERRORPWD DELIMITED BY '  '
+           INTO ERRORMSG.
+      *     DISPLAY ERRORMSG.
+       VALIDATEPWD.
+           IF PWD NOT = RPWD
+              MOVE 'PASSWORD AND REPEAT PASSWORD NOT MATCH.* '
+              TO ERRORMAIL. 
+       VALIDATEMAIL.
+           INSPECT EMAIL TALLYING IX FOR ALL '@'. 
+           IF IX NOT = 1
+              MOVE 'EMAIL FORMAT IS NOT VALID.* '
+              TO ERRORPWD.
 
-
+      *> ***************************************************************
+      *> CREATE AND SENT DE PAGE
+      *> ***************************************************************
        SENDHTML.
       *     DISPLAY 'SENDHTML'.
            IF ACCTN = 'C' OR ACCTN = ' '
@@ -290,7 +343,9 @@
               PERFORM FILL-PAGE
               DISPLAY FUNCTION TRIM (PAGES).
 
-  
+      *> ***************************************************************
+      *> SEND PAGE WITH CONTENT (UPDATE / DELETE)
+      *> ***************************************************************
        FILL-PAGE.
       *       DISPLAY "FILLPAGE".
            MOVE FUNCTION NUMVAL (IDET) TO XNUM12
@@ -376,7 +431,9 @@
            MOVE FUNCTION SUBSTITUTE (PAGES, '##update##', ' ') 
                 TO PAGES.
 
-
+      *> ***************************************************************
+      *> SEND EMPTY PAGE (NEW RECORD).
+      *> ***************************************************************
        EMPTY-PAGE.
       *       DISPLAY "EMPTYPAGE".
             MOVE FUNCTION SUBSTITUTE (PAGES, '##id##"', '"') TO PAGES
@@ -413,7 +470,9 @@
                  TO PAGES.
             MOVE FUNCTION SUBSTITUTE (PAGES, '##save##', ' ') 
                  TO PAGES.
-
+      *> ***************************************************************
+      *> READ FIELDS FILLED BY USER
+      *> ***************************************************************
          READPAGE.
            MOVE PAGEX TO XSQL16.
            MOVE SESSION TO SESIX.
@@ -456,7 +515,9 @@
            END-EXEC
            MOVE 'CIERRE CURSOR ' TO OPERACION.
                  PERFORM SQLERRORES.
-
+      *> ***************************************************************
+      *> FIELD VALUES MOVE AND VALUE CREATION FROM HTML TAGS
+      *> ***************************************************************
        MOVECAMPOS.
       *     DISPLAY FLD "-" VALFLD "<BR>".
            IF FLD = 'SYSCOMM' 
@@ -486,7 +547,9 @@
               IF VALFLD = 'on' MOVE '41-60' TO AGE.
            IF FLD = 'radio5' 
               IF VALFLD = 'on' MOVE '> 61' TO AGE.
-
+      *> ***************************************************************
+      *> ROW LOCKING
+      *> ***************************************************************
         CHECKROWLOCK.
            MOVE SPACES TO BUFFER.
            MOVE 'READ SYSROWLOCK' TO OPERACION.
@@ -502,7 +565,6 @@
               INTO :IDRWL, :TABRWL, :RWRWL, :USRRWL, :SESRWL, :STARWL
            END-EXEC
            PERFORM SQLERRORES.
-      *     DISPLAY "CHECKROWLOCK:", USER, IDFLD, TABLA STARWL.
 
         CREATEROWLOCK.
            MOVE SPACES TO BUFFER.
@@ -515,12 +577,34 @@
                "');"
            INTO BUFFER.
            MOVE 'CREATE ROWLOCK' TO OPERACION.
+           IF USERN > '*' AND IDET > 0
+              EXEC SQL 
+                EXECUTE IMMEDIATE :BUFFER
+               END-EXEC
+               PERFORM SQLERRORES
+           END-IF.
+
+        DELETEROWLOCK.
+           MOVE SPACES TO BUFFER.
+           STRING "DELETE FROM sysrowlock WHERE "
+               "user = '"
+               FUNCTION TRIM(USERN)
+               "' AND session = '"
+               FUNCTION TRIM(SESSION)
+                "' AND tabla = '"
+               FUNCTION TRIM(TABLA)
+                "' AND rowid = '"
+               IDENT, "'"
+           INTO BUFFER.
+           MOVE 'DELETE ROWLOCK' TO OPERACION.
            EXEC SQL 
              EXECUTE IMMEDIATE :BUFFER
-           END-EXEC
+          END-EXEC
            PERFORM SQLERRORES.
-      *     DISPLAY "CREATEROWLOCK:", USERN, IDET, TABLA SESSION.
 
+      *> ***************************************************************
+      *> SQL ERROR CONTROL
+      *> ***************************************************************
         SQLERRORES.
            MOVE SPACES TO RESULTADO.
            IF SQLCODE < 0 
