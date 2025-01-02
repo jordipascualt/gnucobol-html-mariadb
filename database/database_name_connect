@@ -10,4 +10,4 @@ Tables and usage:
 	syspages -> Parts of pages to build a overall HTML page.
 	sysrowlock -> Table to maintain row locking.
 	sysusers -> User table, we include a select, radio bottuns and check-box to show the use.
-
+NOTE: Please use case insensitive for LINUX, or create views in CAPS, ESQL (ocesql), some times ask for tble name in CAPS also whe we code in low caps.
