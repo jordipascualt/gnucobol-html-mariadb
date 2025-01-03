@@ -112,8 +112,8 @@ CREATE TABLE `sysusers` (
 --
 
 INSERT INTO `sysusers` (`id`, `name`, `email`, `username`, `pwd`, `datedmy`, `timehms`, `type`, `age`, `agree`, `comment`) VALUES
-(0, 'guest                                                           ', 'guest@mail.com                  ', 'guest                           ', 'invitado                        ', '02-12-2024', '12:10:45', 'Janitor         ', '01-20           ', 'Y', 'jhkjgkghk jjjjjjjjjjjjjjj                                                                                                       '),
-(0, 'happy', 'happy@tomail.com                ', 'happy', 'feliz', '17-12-2024', '14:17:15', 'CIO             ', '41-60           ', 'Y', 'hhhhhhhhhhhhhhhhh                                                                                                               ');
+(1, 'guest                                                           ', 'guest@mail.com                  ', 'guest                           ', 'invitado                        ', '02-12-2024', '12:10:45', 'Janitor         ', '01-20           ', 'Y', 'jhkjgkghk jjjjjjjjjjjjjjj                                                                                                       '),
+(2, 'happy', 'happy@tomail.com                ', 'happy', 'feliz', '17-12-2024', '14:17:15', 'CIO             ', '41-60           ', 'Y', 'hhhhhhhhhhhhhhhhh                                                                                                               ');
 
 ALTER TABLE `sysfields`
   ADD PRIMARY KEY (`id`);
